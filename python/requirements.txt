@@ -1,0 +1,11 @@
+# Tooling-only baseline. Add your runtime dependencies (httpx, sqlalchemy, etc.)
+# as you build the project. Pin versions when you do.
+
+# Testing
+pytest
+pytest-asyncio
+
+# Linting / dead-code / typing
+ruff
+vulture
+pyright

@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: MIT
+//
+// TEMPLATE — cdk-nag security checks with a suppression review deadline.
+//
+// Rename to `cdk_nag_suppressions.test.ts` once you have a stack to test, then:
+//   1. import your stack and instantiate it under a concrete ENV
+//   2. add `setupFilesAfterEnv: ['aws-cdk-lib/testhelpers/jest-autoclean']`
+//      back into jest.config.js
+//   3. run `npm test`, read each AwsSolutions-* finding, and either fix it or
+//      add a suppression below WITH a justification
+//
+// The point of the deadline: every suppression is a consciously-accepted
+// tradeoff, not a permanent blind spot. When SUPPRESSION_REVIEW_BY passes the
+// suite goes red until each suppression is re-evaluated and the date is pushed
+// forward (or the suppression removed).
+
+import * as cdk from 'aws-cdk-lib';
+import { Annotations, Match } from 'aws-cdk-lib/assertions';
+import { Aspects } from 'aws-cdk-lib';
+import { AwsSolutionsChecks, NagSuppressions } from 'cdk-nag';
+// import { MyStack } from '../lib/my-stack';
+
+const ENV = { account: '123456789012', region: 'us-east-1' };
+
+// Push this forward each time you review the suppressions below.
+const SUPPRESSION_REVIEW_BY = new Date('2026-12-31');
+
+let stack: cdk.Stack;
+
+beforeAll(() => {
+  const app = new cdk.App();
+  // stack = new MyStack(app, 'TestStack', { env: ENV });
+  stack = new cdk.Stack(app, 'TestStack', { env: ENV }); // placeholder
+
+  Aspects.of(app).add(new AwsSolutionsChecks());
+
+  // Each entry documents the tradeoff so future reviewers can re-evaluate.
+  // To add one: run `npm test`, find the rule id in the failure output, evaluate
+  // the tradeoff, then add it here with a clear reason. Example shape:
+  NagSuppressions.addStackSuppressions(stack, [
+    // {
+    //   id: 'AwsSolutions-IAM4',
+    //   reason: 'AmazonSSMManagedInstanceCore is required for SSM Session Manager; no narrower managed policy exists.',
+    // },
+  ]);
+});
+
+test('suppression review deadline has not passed', () => {
+  expect(new Date().getTime()).toBeLessThan(SUPPRESSION_REVIEW_BY.getTime());
+});
+
+test('no unsuppressed cdk-nag errors', () => {
+  const errors = Annotations.fromStack(stack).findError(
+    '*',
+    Match.stringLikeRegexp('AwsSolutions-.*'),
+  );
+  expect(errors).toHaveLength(0);
+});

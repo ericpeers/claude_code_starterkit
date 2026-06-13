@@ -1,0 +1,11 @@
+[sqlfluff]
+max_line_length = 180
+
+[sqlfluff:rules:layout.long_lines]
+ignore_comment_lines = True
+
+[sqlfluff:rules:references.keywords]
+# Column names that happen to be SQL keywords but are intentional in your schema.
+# List them explicitly so genuinely bad keywords (select, where, from, ...) are
+# still caught. Adjust to match your own schema's column names.
+ignore_words = name,type,date,role,comment,owner,key,value,close

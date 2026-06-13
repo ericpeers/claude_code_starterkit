@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/main.tsx",
+    "src/__tests__/**/*.test.{ts,tsx}",
+    "tests/**/*.test.{ts,tsx}",
+    "e2e/**/*.spec.ts",
+    "scripts/**/*.{js,mjs,ts}"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "scripts/**/*.{js,mjs,ts}"
+  ],
+  "ignore": [],
+  "ignoreDependencies": [
+    "@jest/globals",
+    "@types/testing-library__jest-dom",
+    "autoprefixer",
+    "postcss",
+    "tailwindcss"
+  ]
+}

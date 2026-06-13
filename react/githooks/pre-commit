@@ -1,0 +1,51 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Pre-commit hook: runs unit and e2e tests only if source changed since last pass.
+# Each suite has its own stamp file so passing one doesn't force a rerun of the
+# other. Touch the stamp on success; delete stamps to force a full run.
+#
+# Wire in with:  git config core.hooksPath .githooks  (setup_dev.sh does this).
+
+needs_run() {
+  stamp="$1"
+  [ ! -f "$stamp" ] && return 0
+
+  src_changed=$(find src e2e \
+    \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) \
+    -newer "$stamp" 2>/dev/null | head -1)
+
+  cfg_changed=$(find . -maxdepth 1 \
+    \( -name 'package.json' -o -name 'tsconfig*.json' \
+       -o -name 'vite.config.*' -o -name 'playwright.config.*' \
+       -o -name 'jest.config.*' -o -name 'eslint.config.*' \) \
+    -newer "$stamp" 2>/dev/null | head -1)
+
+  [ -n "$src_changed" ] || [ -n "$cfg_changed" ]
+}
+
+run_unit=false
+run_e2e=false
+
+if needs_run .test-stamp-unit; then
+  run_unit=true
+fi
+if needs_run .test-stamp-e2e; then
+  run_e2e=true
+fi
+
+if ! $run_unit && ! $run_e2e; then
+  echo "[pre-commit] All tests already passed for current source -- skipping."
+  exit 0
+fi
+
+if $run_unit; then
+  echo "[pre-commit] Running unit tests..."
+  npm test || exit 1
+  touch .test-stamp-unit
+fi
+
+if $run_e2e; then
+  echo "[pre-commit] Running e2e tests..."
+  npm run test:e2e || exit 1
+  touch .test-stamp-e2e
+fi

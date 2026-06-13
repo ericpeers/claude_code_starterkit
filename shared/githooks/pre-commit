@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Generic pre-commit test gate.
+#
+# Scaffolding step: replace the TEST_CMD line below with the stack's test
+# command, e.g.
+#   Go:     TEST_CMD="go test ./tests/ -timeout 120s"
+#   Python: TEST_CMD=".venv/bin/pytest -q"
+#   Node:   TEST_CMD="npm test"
+#
+# Wire this hook in with:  git config core.hooksPath .githooks
+# (setup_dev.sh does this for you.)
+set -euo pipefail
+
+TEST_CMD="echo 'No test command configured in .githooks/pre-commit' >&2; exit 1"
+
+echo "Running tests before commit..."
+if ! bash -c "$TEST_CMD"; then
+  echo "Commit aborted: tests failed." >&2
+  exit 1
+fi

@@ -1,0 +1,4 @@
+{
+  "typeCheckingMode": "basic",
+  "exclude": [".venv", "vulture_whitelist.py"]
+}

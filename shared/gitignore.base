@@ -1,0 +1,32 @@
+# Secrets & local env — NEVER commit real values
+.env
+.env.local
+*.local.json
+.credentials.json
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build / output artifacts
+dist/
+build/
+bin/
+cdk.out/
+*.tsbuildinfo
+coverage/
+
+# Test stamp files (pre-commit cache)
+.test-stamp-*
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
