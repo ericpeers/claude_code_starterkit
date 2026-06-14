@@ -114,14 +114,33 @@ exactly why step 1 collects the holder up front.
 
 ## Final report to the user
 
-After scaffolding, tell the user to:
+End by printing this next-steps block **verbatim** — substitute the real `DEST`
+path and the stack's run command from the table below, and change nothing else:
 
 ```
-cd DEST
-git init                 # if not already a repo
-./setup_dev.sh           # installs tooling, wires hooks (re-prompts for the
-                         # copyright holder only if step 1 didn't set it)
+cd <DEST>
+git init            # if not already a repo
+./setup_dev.sh      # installs deps & tooling, wires hooks, sets up the local dev env (.env, DB, etc.)
+<run-command>       # start the app
 ```
+
+Stack run command:
+
+| Stack  | `<run-command>` |
+|---|---|
+| go     | `go run .` |
+| react  | `npm run dev` |
+| infra  | `npm run cdk -- synth`  (after you add `bin/app.ts`) |
+| python | `python -m <your_package>`  (your service's entry point) |
+
+**Keep the list to exactly these steps.** Do NOT add manual setup such as
+`createdb`/`psql`, `create_tables.sql`, editing `.env`, or exporting `PG_URL` —
+provisioning the database/user, applying the schema, and writing a working `.env`
+are `setup_dev.sh`'s job. If a first run needs something that isn't covered, the
+fix is to add it to `setup_dev.sh`, **not** to append a manual step here. (A
+prior run leaked a manual `psql … create_tables.sql` line into the next-steps
+because `setup_dev.sh` wasn't provisioning the DB — that's a setup bug, not a
+next-step.)
 
 For infra, note the copyright gate exempts the kit's SPDX-tagged files and only
 requires a `Copyright (c) <year> <holder>` header on the user's *own* source. The
