@@ -21,26 +21,48 @@ Let **DEST** = the current directory (the new, ideally empty, repo).
 
 ## Universal steps (every stack)
 
-1. **CLAUDE.md** — copy `KIT/<stack>/CLAUDE_<stack>.md` → `DEST/CLAUDE.md`. Then
+1. **Copyright holder — ask before writing any owned file.** Do this *first*,
+   as an interview question, before generating any source. This repo's own
+   files must carry a `Copyright (c) <year> <holder>` header, and the header gate
+   (`copyright_test.go` / `test_copyright.py` / `copyright.test.ts` /
+   `copyright_checks.test.ts`) **fails hard the moment a non-SPDX source file
+   exists while the holder is unset**. An agent normally generates real code
+   during scaffolding — not just the SPDX-tagged kit files — so the holder is
+   needed up front, long before `setup_dev.sh` runs.
+   * Ask the user: *"Who is the copyright holder for this project's source?
+     (e.g. `Jane Doe` or `Acme Inc`)"* You may *propose* a default inferred from
+     the environment (git `user.name`/`user.email`, an existing `LICENSE`), but
+     **confirm it — never assume it silently.** A guessed name is a real
+     ownership decision made on the user's behalf.
+   * Write the confirmed value to `DEST/.copyright-holder` (the user commits it).
+   * Every non-SPDX file you author from here on (including any code/schema you
+     generate) must carry `Copyright (c) <current-year> <holder>`. Kit files you
+     copy keep their `SPDX-License-Identifier: MIT` headers untouched.
+   This is belt-and-suspenders: `setup_dev.sh` re-prompts only if
+   `.copyright-holder` is still missing, so setting it now makes setup a no-op
+   for it later. If the user declines to give a holder, do **not** invent one —
+   either author only SPDX-tagged files, or leave code generation to the user and
+   let `setup_dev.sh` collect the holder.
+2. **CLAUDE.md** — copy `KIT/<stack>/CLAUDE_<stack>.md` → `DEST/CLAUDE.md`. Then
    inline the shared discipline: read `KIT/CONVENTIONS.md` and prepend its body
    under a `## Engineering Conventions` heading (or replace the "see
    CONVENTIONS.md" pointer at the top with the actual content), so the new repo
    carries the conventions without depending on KIT.
-2. **Stack files** — copy everything under `KIT/<stack>/` (except
+3. **Stack files** — copy everything under `KIT/<stack>/` (except
    `CLAUDE_<stack>.md`, already handled) into `DEST/`, preserving structure:
    `tests/`, config files, `setup_dev.sh`, `.env_sample`, and any stack subdirs.
-3. **.claude/** — create `DEST/.claude/` and copy:
+4. **.claude/** — create `DEST/.claude/` and copy:
    * `KIT/shared/claude/settings.json` → `DEST/.claude/settings.json`
    * `KIT/shared/claude/skills/review-code/` → `DEST/.claude/skills/review-code/`
-4. **Git hooks** — copy the stack's pre-commit:
+5. **Git hooks** — copy the stack's pre-commit:
    * react: `KIT/react/githooks/pre-commit` → `DEST/.githooks/pre-commit`
    * go / python / infra: `KIT/shared/githooks/pre-commit` →
      `DEST/.githooks/pre-commit`, and replace the `TEST_CMD="..."` line with the
      stack's test command (see per-stack table below).
    Make it executable. (`setup_dev.sh` runs `git config core.hooksPath .githooks`.)
-5. **.gitignore** — copy `KIT/shared/gitignore.base` → `DEST/.gitignore`.
-6. **Make scripts executable** — `chmod +x DEST/setup_dev.sh` and the pre-commit.
-7. **Report next steps** (see bottom).
+6. **.gitignore** — copy `KIT/shared/gitignore.base` → `DEST/.gitignore`.
+7. **Make scripts executable** — `chmod +x DEST/setup_dev.sh` and the pre-commit.
+8. **Report next steps** (see bottom).
 
 ## Per-stack details
 
@@ -48,8 +70,11 @@ Every stack ships a license/copyright gate (`copyright_test.go`,
 `test_copyright.py`, `copyright.test.ts`, infra's `copyright_checks.test.ts`):
 it exempts SPDX-tagged files (the kit's own) and requires the user's own files to
 carry a `Copyright (c) <year> <holder>` header, where the holder comes from the
-committed `.copyright-holder` file written by `setup_dev.sh`. A fresh scaffold is
-green.
+committed `.copyright-holder` file — written during scaffolding (universal step 1)
+and re-confirmed by `setup_dev.sh` if still missing. A scaffold that ships only
+SPDX-tagged kit files is green even before the holder is set; the gate bites as
+soon as you (or the scaffolding agent) add a non-SPDX source file, which is
+exactly why step 1 collects the holder up front.
 
 ### go
 * Copy: `CLAUDE_go.md`, `go.mod` (then tell the user to set the module path),
@@ -94,10 +119,12 @@ After scaffolding, tell the user to:
 ```
 cd DEST
 git init                 # if not already a repo
-./setup_dev.sh           # installs tooling, wires hooks, records your copyright holder
+./setup_dev.sh           # installs tooling, wires hooks (re-prompts for the
+                         # copyright holder only if step 1 didn't set it)
 ```
 
 For infra, note the copyright gate exempts the kit's SPDX-tagged files and only
 requires a `Copyright (c) <year> <holder>` header on the user's *own* source. The
-holder is read from `.copyright-holder` (written by `setup_dev.sh`); a fresh
-scaffold is green until the user adds their own un-headered files.
+holder is read from `.copyright-holder` (collected in universal step 1, with
+`setup_dev.sh` as a fallback); a scaffold of SPDX-only kit files is green until
+the user adds their own un-headered files.
