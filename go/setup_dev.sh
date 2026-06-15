@@ -41,7 +41,35 @@ if [ ! -f .env ]; then
   cp .env_sample .env
   echo "  created .env from .env_sample — fill in real values"
 else
-  echo "  .env already exists; leaving it untouched"
+  echo "  .env already exists; leaving existing values untouched"
+fi
+# Replace the shipped JWT_SECRET placeholder with a generated secret so it never
+# reaches a running server. Only the placeholder line is rewritten, so a real
+# secret already in .env is preserved.
+if grep -qE '^(export )?JWT_SECRET=change-me$' .env 2>/dev/null; then
+  if have openssl; then
+    sed -i "s|^\(export \)\{0,1\}JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
+    chmod 600 .env 2>/dev/null || true
+    echo "  generated JWT_SECRET"
+  else
+    warn "openssl not found — JWT_SECRET left as placeholder; set it manually in .env"
+  fi
+fi
+
+# --- Phase 3b: PostgreSQL role/database -----------------------------------
+# Idempotently provision a Postgres role + db for the current developer and sync
+# credentials into .env. Never resets an existing role's password (see helper).
+log "Provisioning PostgreSQL"
+PG_HELPER=""
+for _c in "scripts/pg_setup.sh" "../shared/scripts/pg_setup.sh"; do
+  [ -f "$_c" ] && { PG_HELPER="$_c"; break; }
+done
+if [ -n "$PG_HELPER" ]; then
+  # shellcheck disable=SC1090
+  source "$PG_HELPER"
+  setup_postgres
+else
+  warn "scripts/pg_setup.sh not found — skipping Postgres provisioning"
 fi
 
 # --- Phase 4: copyright holder --------------------------------------------
@@ -58,6 +86,30 @@ else
   else
     warn "no holder entered; set it later in .copyright-holder. The header gate needs it once you add non-SPDX files."
   fi
+fi
+
+# --- Phase 4b: Go module path ---------------------------------------------
+# The module path is baked into every internal import. On a fresh scaffold it
+# is still the 'example.com/app' sentinel if the module-path interview was
+# skipped during scaffolding. Offer to set it now (idempotent: a no-op once it
+# is no longer the sentinel). scripts/rename_module.sh rewrites go.mod + imports
+# and re-tidies.
+log "Checking Go module path"
+MODULE_SENTINEL="example.com/app"
+CURRENT_MODULE="$(awk '/^module /{print $2; exit}' go.mod 2>/dev/null || true)"
+if [ "$CURRENT_MODULE" = "$MODULE_SENTINEL" ]; then
+  read -r -p "  Module path is still the '$MODULE_SENTINEL' placeholder. Enter the real one (e.g. github.com/your-org/$(basename "$(pwd)")), blank to keep it: " MODULE_PATH
+  if [ -n "${MODULE_PATH:-}" ]; then
+    if [ -x scripts/rename_module.sh ]; then
+      scripts/rename_module.sh "$MODULE_PATH"
+    else
+      warn "scripts/rename_module.sh not found; set 'module' in go.mod manually, then run 'go mod tidy'"
+    fi
+  else
+    warn "module path left as '$MODULE_SENTINEL'; run scripts/rename_module.sh <path> when ready"
+  fi
+else
+  echo "  module path: $CURRENT_MODULE"
 fi
 
 # --- Phase 5: git hooks ---------------------------------------------------

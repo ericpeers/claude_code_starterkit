@@ -77,14 +77,47 @@ soon as you (or the scaffolding agent) add a non-SPDX source file, which is
 exactly why step 1 collects the holder up front.
 
 ### go
-* Copy: `CLAUDE_go.md`, `go.mod` (then tell the user to set the module path),
-  `Makefile`, `setup_dev.sh`, `.env_sample`, `staticcheck.conf`, `.sqlfluff`,
+* Copy: `CLAUDE_go.md`, `go.mod`, `Makefile`, `setup_dev.sh`, `.env_sample`,
+  `staticcheck.conf`, `.sqlfluff`,
   `tests/` (`quality_test.go`, `copyright_test.go`, plus `setup_test.go` +
-  `schema_test.go`, which are `//go:build itest` tagged).
+  `schema_test.go`, which are `//go:build itest` tagged). Also copy
+  `KIT/shared/scripts/pg_setup.sh` → `DEST/scripts/pg_setup.sh` (sourced by
+  `setup_dev.sh`; keep its `SPDX` header, no `chmod` needed) and
+  `KIT/go/scripts/rename_module.sh` → `DEST/scripts/rename_module.sh`
+  (`chmod +x`; keep its `SPDX` header — it sets/renames the module path).
+* **Module path — interview the user.** The module path is baked into every
+  `internal/...` import the moment you generate layered code, so decide it up
+  front (like the copyright holder and DB name). The shipped `go.mod` carries the
+  sentinel `example.com/app`. Ask which form the user wants:
+    1. `github.com/<org>/<DEST-dir>` — ask for `<org>`; host defaults to
+       `github.com` (let them override). **Recommended.**
+    2. `<DEST-dir>` — a bare module path equal to the directory name (fine for a
+       local/private module until a remote exists).
+    3. A custom module path they supply verbatim.
+    4. Skip — leave the `example.com/app` sentinel and name it later.
+  For 1–3, set the chosen value (run `DEST/scripts/rename_module.sh <path>`, or —
+  before any code exists — just edit the `module` line in `go.mod`) and use it as
+  the import prefix for **all** Go code you generate. For 4, leave the sentinel,
+  generate imports against `example.com/app`, and add the rename line to the
+  final report (below). The choice is reversible anytime:
+  `scripts/rename_module.sh <new/path>` rewrites `go.mod` + every import and
+  re-runs `go mod tidy`, and `setup_dev.sh` re-prompts whenever the sentinel is
+  still in place.
+* **Database name — interview the user.** Like the copyright holder, ask up front:
+  *"What should the local Postgres database be named?"* Propose the `DEST`
+  directory name as the default (the same value `setup_dev.sh` would fall back to),
+  but confirm it. Substitute the chosen name for `app` in the `PG_URL`
+  path of the copied `.env_sample` (leave the `user:password` placeholder — that's
+  what tells `setup_dev.sh` to provision the role). This is belt-and-suspenders:
+  if you skip it, `setup_dev.sh` derives the default from the directory and prompts.
 * pre-commit TEST_CMD: `go test ./tests/ -timeout 120s`
 * Notes: file-based gates run with plain `go test ./tests/`. DB-backed tests need
   `PG_URL` and run with `go test -tags itest ./tests/`. The user adds
-  `create_tables.sql` and code under `internal/`.
+  `create_tables.sql` and code under `internal/`. On first run `setup_dev.sh`
+  provisions a Postgres role + database for the current user from `PG_URL` and
+  rewrites the `PG_URL` line in `.env`; for a role that already exists it verifies
+  or prompts for the existing password and, only if none works (e.g. a peer-auth
+  role with no TCP password), offers to generate and set one with explicit consent.
 
 ### python
 * Copy: `CLAUDE_python.md`, `setup_dev.sh`, `requirements.txt`,
@@ -133,7 +166,16 @@ Stack run command:
 | infra  | `npm run cdk -- synth`  (after you add `bin/app.ts`) |
 | python | `python -m <your_package>`  (your service's entry point) |
 
-**Keep the list to exactly these steps.** Do NOT add manual setup such as
+**Keep the list to exactly these steps** — with one exception: if the user chose
+to skip the go module path (option 4 above), insert this line immediately after
+`git init`, so imports resolve before `setup_dev.sh` builds:
+
+```
+./scripts/rename_module.sh github.com/<org>/<DEST>   # set your real module path
+```
+
+(`setup_dev.sh` also re-prompts for it when the sentinel is still in place, so
+this is belt-and-suspenders.) Otherwise: Do NOT add manual setup such as
 `createdb`/`psql`, `create_tables.sql`, editing `.env`, or exporting `PG_URL` —
 provisioning the database/user, applying the schema, and writing a working `.env`
 are `setup_dev.sh`'s job. If a first run needs something that isn't covered, the
