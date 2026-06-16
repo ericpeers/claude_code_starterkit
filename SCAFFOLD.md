@@ -77,14 +77,29 @@ soon as you (or the scaffolding agent) add a non-SPDX source file, which is
 exactly why step 1 collects the holder up front.
 
 ### go
-* Copy: `CLAUDE_go.md`, `go.mod`, `Makefile`, `setup_dev.sh`, `.env_sample`,
-  `staticcheck.conf`, `.sqlfluff`,
-  `tests/` (`quality_test.go`, `copyright_test.go`, plus `setup_test.go` +
-  `schema_test.go`, which are `//go:build itest` tagged). Also copy
+* Copy: `CLAUDE_go.md`, `go.mod`, `go.sum`, `Makefile`, `setup_dev.sh`,
+  `.env_sample`, `staticcheck.conf`, `.sqlfluff`,
+  `tests/` (`quality_test.go`, `copyright_test.go`, `swagger_naming_test.go`,
+  `setup_test.go`, `schema_test.go` — one suite, no build tags; DB-backed tests
+  skip on a fresh scaffold but become required once `create_tables.sql` exists,
+  with `SKIP_DB=1` as an explicit opt-out),
+  and the `internal/` building blocks: `internal/middleware/gin_logger.go`
+  (logrus-backed Gin request logger) and `internal/swagger/swagger.go`
+  (mounts the Swagger UI). These give the generated app a single logging path
+  and Swagger out of the box — see CLAUDE_go.md "Default HTTP stack". Also copy
   `KIT/shared/scripts/pg_setup.sh` → `DEST/scripts/pg_setup.sh` (sourced by
   `setup_dev.sh`; keep its `SPDX` header, no `chmod` needed) and
   `KIT/go/scripts/rename_module.sh` → `DEST/scripts/rename_module.sh`
   (`chmod +x`; keep its `SPDX` header — it sets/renames the module path).
+* **Default HTTP stack — Gin + logrus + swaggo.** When you generate the app
+  (`main.go`, handlers), wire logging and docs through the shipped building
+  blocks rather than rolling your own: build the router with `gin.New()` +
+  `gin.Recovery()` + `middleware.GinLogger()` (never `gin.Default()`), configure
+  logrus once from `LOGLEVEL`, annotate handlers with `swag` comments, and mount
+  the UI with `swagger.Register(router)` behind `ENABLE_SWAGGER`. `setup_dev.sh`
+  installs the `swag` CLI; `make docs` generates `docs/` and
+  `tests/swagger_naming_test.go` then lints the surface. Full pattern and
+  conventions are in `CLAUDE_go.md` ("Default HTTP stack", "Logging", "Swagger").
 * **Module path — interview the user.** The module path is baked into every
   `internal/...` import the moment you generate layered code, so decide it up
   front (like the copyright holder and DB name). The shipped `go.mod` carries the
@@ -111,9 +126,13 @@ exactly why step 1 collects the holder up front.
   what tells `setup_dev.sh` to provision the role). This is belt-and-suspenders:
   if you skip it, `setup_dev.sh` derives the default from the directory and prompts.
 * pre-commit TEST_CMD: `go test ./tests/ -timeout 120s`
-* Notes: file-based gates run with plain `go test ./tests/`. DB-backed tests need
-  `PG_URL` and run with `go test -tags itest ./tests/`. The user adds
-  `create_tables.sql` and code under `internal/`. On first run `setup_dev.sh`
+* Notes: one test suite — `go test ./tests/` runs the file-based gates and the
+  DB-backed tests together (no build tags). On a fresh scaffold (no
+  `create_tables.sql`) the DB tests skip and the run is green; once a schema
+  exists a reachable `PG_URL` (loaded from `.env`) is **required** — a missing one
+  fails rather than silently skipping — and `SKIP_DB=1` is the explicit opt-out
+  for a lint-only run. The user adds `create_tables.sql` and code under
+  `internal/`. On first run `setup_dev.sh`
   provisions a Postgres role + database for the current user from `PG_URL` and
   rewrites the `PG_URL` line in `.env`; for a role that already exists it verifies
   or prompts for the existing password and, only if none works (e.g. a peer-auth

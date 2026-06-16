@@ -28,6 +28,60 @@ handlers → services → repositories → db pool
 Keep the arrows one-directional. Handlers never touch the pool directly;
 repositories never contain business logic.
 
+### Default HTTP stack
+
+The kit standardizes on **Gin** for routing, **logrus** for logging, and
+**swaggo** for API docs, and ships the wiring as building blocks:
+`internal/middleware/gin_logger.go` and `internal/swagger/swagger.go`. Use them;
+don't hand-roll a second logging or docs path. A `main.go` follows this shape:
+
+```go
+log.SetFormatter(&log.TextFormatter{FullTimestamp: true, TimestampFormat: "2006-01-02 15:04:05"})
+setLogLevel(cfg.LogLevel)              // see Logging below
+
+gin.SetMode(gin.ReleaseMode)
+router := gin.New()                    // NOT gin.Default() — it adds Gin's own logger
+router.Use(gin.Recovery(), middleware.GinLogger())
+if cfg.EnableSwagger {                 // ENABLE_SWAGGER
+    swagger.Register(router)
+    log.Info("Swagger UI enabled at /swagger/index.html")
+}
+```
+
+## Logging
+
+One logger for the whole app: `logrus`, configured once at startup, used
+everywhere via the package logger (`log "github.com/sirupsen/logrus"`).
+
+* **Set the formatter and level once in `main`** before doing any work, so the
+  startup banner and every later line share one format. Map `LOGLEVEL`
+  (debug|info|warn|error from config) onto `log.SetLevel`; treat an unrecognized
+  value as a fatal config error rather than silently defaulting.
+* **Route Gin's request logs through logrus** with `middleware.GinLogger()` (it
+  picks the level from the response status: 5xx→Error, 4xx→Warn, else Info), so
+  request lines obey the same `LOGLEVEL` filter. Build the router with
+  `gin.New()` + `gin.Recovery()`, never `gin.Default()` (which installs Gin's
+  own stdout logger and produces a second, differently-formatted stream).
+* Log through the `log` package functions (`log.Infof`, `log.Errorf`), not
+  `fmt.Print*`; never the standard library `log` package.
+
+## Swagger / API docs
+
+The OpenAPI surface is **generated from handler annotations** — one source of
+truth, never a hand-maintained spec.
+
+* Annotate `main()` (title/version/basepath/security) and each handler with
+  `swag` comments. Generate the spec with `make docs` (`swag init` → `./docs`).
+* Blank-import the generated package in `main.go` so its `init()` registers the
+  spec: `import _ "<your-module>/docs"`. Mount the UI with
+  `swagger.Register(router)`, gated on `cfg.EnableSwagger` (`ENABLE_SWAGGER`) so
+  it is off in production.
+* `tests/swagger_naming_test.go` lints the generated `docs/swagger.json`: URL
+  path segments must be **kebab-case**, JSON fields and query/body/form/path
+  params **snake_case**. The gate skips until you generate docs, then enforces.
+  Regenerate docs (`make docs`) after changing annotations so the gate sees the
+  current surface.
+
 ## Function design
 
 When a function computes intermediate data that could be useful elsewhere:
@@ -77,21 +131,37 @@ When a query could return millions of rows (bulk export):
 
 ## Testing
 
+* **One suite, run every time.** There are no build tags or a separate DB-only
+  test class: `go test ./tests/` (or `make test`) runs the file-based gates and
+  the DB-backed tests together, always. Don't reintroduce a split (`-tags itest`,
+  a `test_itest` target) — if a test needs the database, it skips itself when no
+  DB is configured rather than living behind a tag.
 * Every feature gets a test in `tests/`, covering both error conditions and
   correctness.
-* Tests run against an **isolated ephemeral database** created and dropped by
-  `TestMain` (see `tests/setup_test.go`). A safety guard aborts if the connected
-  DB looks like production. The production database is never touched.
+* DB-backed tests run against an **isolated ephemeral database** created and
+  dropped by `TestMain` (see `tests/setup_test.go`). A safety guard aborts if the
+  connected DB looks like production. The production database is never touched.
+* **The database is required once you have a schema** — it is not optional that
+  silently skips. The rule (in `tests/setup_test.go`):
+  * no `create_tables.sql` yet (fresh scaffold) → no DB-backed tests exist, so the
+    run skips DB setup and stays green;
+  * `create_tables.sql` present but `PG_URL` unset → the run **fails** (a dropped
+    or forgotten `PG_URL` must not turn the DB suite into a green no-op);
+  * `SKIP_DB=1` → explicit opt-out for a lint-only run or a host without Postgres.
+  Guard your own DB tests with `if testPool == nil { t.Skip(...) }` so they skip
+  only on the legitimate opt-out paths.
 * Do not rely on production data existing; create what your test needs.
 
 ### Running tests
 
 ```bash
-go test ./tests/ -timeout 120s              # file-based gates, no DB
-PG_URL=... go test -tags itest ./tests/     # full suite incl. DB-backed tests
+go test ./tests/ -timeout 120s              # everything — file-based gates + DB-backed tests
+SKIP_DB=1 go test ./tests/ -timeout 120s    # file-based gates only (no Postgres needed)
 ```
 
-The `.env` file is loaded automatically — no need to source anything.
+`PG_URL` comes from `.env`, which is loaded automatically — no need to source
+anything. Once `create_tables.sql` exists, a reachable `PG_URL` is mandatory
+unless you pass `SKIP_DB=1`.
 
 ### License-header gate
 

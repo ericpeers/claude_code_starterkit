@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-//go:build itest
-
 package tests
 
 // Schema-drift detection: verifies the live (test) database schema matches the
 // checked-in DDL file column-for-column. Catches an incomplete pg_restore,
 // untracked ALTERs, or a binary built against a different schema than was
-// applied. Build-tagged `itest` (needs testPool from setup_test.go).
+// applied. Skips when no test database is configured (testPool nil, set up in
+// setup_test.go), so it runs as part of the single `go test ./tests/` suite.
 
 import (
 	"bufio"

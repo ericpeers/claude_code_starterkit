@@ -50,11 +50,25 @@ _pg_sanitize_dbname() {
   printf '%s' "${n:0:63}"
 }
 
+# _pg_url_encode S -> percent-encode S for safe use in a URL userinfo field, so a
+# password containing URL-reserved characters (@ : / # ? & % ...) survives both
+# the connection attempt and being written into .env. Mirror of the unquote() in
+# _pg_parse_url, so the two round-trip. libpq/pgx decode the escapes on connect.
+_pg_url_encode() {
+  python3 - "$1" <<'PY'
+import sys
+from urllib.parse import quote
+print(quote(sys.argv[1], safe=""), end="")
+PY
+}
+
 # _pg_url USER PASS HOST PORT DB -> connection string (omits ":pass" when PASS empty).
+# The password is percent-encoded; the user/host/port/db are role/connection
+# identifiers that are already restricted to URL-safe characters.
 _pg_url() {
   local u="$1" pw="$2" h="$3" port="$4" db="$5"
   if [ -n "$pw" ]; then
-    printf 'postgres://%s:%s@%s:%s/%s' "$u" "$pw" "$h" "$port" "$db"
+    printf 'postgres://%s:%s@%s:%s/%s' "$u" "$(_pg_url_encode "$pw")" "$h" "$port" "$db"
   else
     printf 'postgres://%s@%s:%s/%s' "$u" "$h" "$port" "$db"
   fi
@@ -122,15 +136,15 @@ setup_postgres() {
 
   # Can we act as the postgres superuser? Needed to inspect/create roles & dbs.
   log "Checking PostgreSQL superuser access (may prompt for sudo)"
-  if sudo -u postgres psql -tAc 'SELECT 1' >/dev/null 2>&1; then
+  if sudo -u postgres psql -w -tAc 'SELECT 1' >/dev/null 2>&1; then
     local role_exists
-    role_exists=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${role}'" 2>/dev/null || true)
+    role_exists=$(sudo -u postgres psql -w -tAc "SELECT 1 FROM pg_roles WHERE rolname='${role}'" 2>/dev/null || true)
 
     if [ "$role_exists" != "1" ]; then
       # Brand-new role: generate a password, create with CREATEDB, record it.
       log "Creating PostgreSQL role '${role}'"
       resolved_pass="$(openssl rand -hex 16)"
-      if sudo -u postgres psql -q -c \
+      if sudo -u postgres psql -w -q -c \
           "CREATE USER ${role} WITH ENCRYPTED PASSWORD '${resolved_pass}' CREATEDB;" 2>/dev/null; then
         have_creds=true
       else
@@ -141,12 +155,12 @@ setup_postgres() {
       # Existing role: reconcile credentials, testing the SAME way the app connects
       # (TCP to $host), so we never record creds that work only over the socket.
       log "PostgreSQL role '${role}' already exists — reconciling credentials"
-      if psql "$(_pg_url "$role" '' "$host" "$port" postgres)" -tAc 'SELECT 1' >/dev/null 2>&1; then
+      if psql -w "$(_pg_url "$role" '' "$host" "$port" postgres)" -tAc 'SELECT 1' >/dev/null 2>&1; then
         # Passwordless over TCP (trust auth): the app needs no password either.
         log "Role '${role}' connects over TCP without a password (trust auth)"
         have_creds=true                          # resolved_pass stays empty
       elif [ -n "$p_pass" ] && [ "$p_pass" != "password" ] \
-             && PGPASSWORD="$p_pass" psql \
+             && PGPASSWORD="$p_pass" psql -w \
                   "$(_pg_url "$role" "$p_pass" "$host" "$port" postgres)" -tAc 'SELECT 1' >/dev/null 2>&1; then
         # A real password already in .env that works over TCP: keep it.
         resolved_pass="$p_pass"; have_creds=true
@@ -155,10 +169,12 @@ setup_postgres() {
         # Prompt for the password the role already uses (may be shared with other
         # apps). A blank entry means "I have no password — generate one for me".
         local tries=0 input
+        warn "This is the PostgreSQL password for the database role '${role}'"
+        warn "(NOT your Linux login / sudo password)."
         while [ "$tries" -lt 3 ]; do
-          read -r -s -p "  PostgreSQL password for role '${role}' (blank to generate & set a new one): " input; echo
+          read -r -s -p "  PostgreSQL password for DB role '${role}' (blank to generate & set a new one): " input; echo
           [ -z "$input" ] && break
-          if PGPASSWORD="$input" psql \
+          if PGPASSWORD="$input" psql -w \
                "$(_pg_url "$role" "$input" "$host" "$port" postgres)" -tAc 'SELECT 1' >/dev/null 2>&1; then
             resolved_pass="$input"; have_creds=true
             log "Password verified for role '${role}'"
@@ -178,7 +194,7 @@ setup_postgres() {
           read -r -p "  Generate and set a new password on role '${role}'? [y/N]: " _consent
           if [[ "${_consent:-}" =~ ^[Yy] ]]; then
             resolved_pass="$(openssl rand -hex 16)"
-            if sudo -u postgres psql -q -c \
+            if sudo -u postgres psql -w -q -c \
                  "ALTER ROLE ${role} WITH ENCRYPTED PASSWORD '${resolved_pass}';" 2>/dev/null; then
               have_creds=true
               log "Set a new password on role '${role}'"
@@ -194,10 +210,10 @@ setup_postgres() {
 
     # Ensure the database exists, owned by the role.
     local db_exists
-    db_exists=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" 2>/dev/null || true)
+    db_exists=$(sudo -u postgres psql -w -tAc "SELECT 1 FROM pg_database WHERE datname='${dbname}'" 2>/dev/null || true)
     if [ "$db_exists" != "1" ]; then
       log "Creating database '${dbname}'"
-      if sudo -u postgres createdb -O "${role}" "${dbname}" 2>/dev/null; then
+      if sudo -u postgres createdb -w -O "${role}" "${dbname}" 2>/dev/null; then
         log "Database '${dbname}' created"
       else
         warn "failed to create database '${dbname}'"
@@ -217,7 +233,7 @@ setup_postgres() {
   fi
 
   # Final connection test against the real target database.
-  if PGPASSWORD="$resolved_pass" psql "$pg_url" -tAc 'SELECT 1' >/dev/null 2>&1; then
+  if PGPASSWORD="$resolved_pass" psql -w "$pg_url" -tAc 'SELECT 1' >/dev/null 2>&1; then
     log "PostgreSQL connection OK (${role}@${host}:${port}/${dbname})"
   else
     warn "PostgreSQL connection test failed for ${role}@${host}:${port}/${dbname}"

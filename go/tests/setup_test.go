@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: MIT
 
-//go:build itest
-
 package tests
 
 // Ephemeral test-database lifecycle with a production-data safety guard.
 //
-// Build-tagged `itest`: run with `go test -tags itest ./tests/`. Without the tag
-// (plain `go test ./tests/`), only the file-based gates in quality_test.go
-// compile and run — no pgx dependency, no Postgres required.
+// One suite, one command: `go test ./tests/` runs everything — the file-based
+// gates AND these DB-backed tests — every time, with no build tags to remember.
 //
-// REQUIRES: github.com/jackc/pgx/v5 in go.mod and a PG_URL pointing at a local
-// Postgres cluster. If PG_URL is unset, DB setup is skipped and only the
-// file-based tests (see quality_test.go) run — so a fresh scaffold without a
-// database still passes.
+// The database is REQUIRED as soon as the project has a schema, so a dropped
+// PG_URL fails loudly instead of silently skipping the DB suite (see runTests for
+// the exact rule). A fresh scaffold (no create_tables.sql yet) still passes with
+// no database, and SKIP_DB=1 is an explicit opt-out for lint-only runs.
 //
 // TestMain creates a throwaway database (drops any orphan first), applies your
 // schema, asserts it does NOT look like production, then runs the suite and
@@ -35,10 +32,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 const (
-	testDBName             = "app_itest"
+	testDBName             = "app_test"
 	productionRowThreshold = 10_000
 	guardTable             = "users" // a table that exists in your schema
 )
@@ -54,11 +52,43 @@ func TestMain(m *testing.M) {
 func runTests(m *testing.M) int {
 	ctx := context.Background()
 
+	// Load .env (repo root, one level above tests/) so a single `go test ./tests/`
+	// picks up PG_URL without the developer exporting it — this is what makes the
+	// DB-backed tests part of the everyday run. godotenv never overrides a variable
+	// already set in the shell, so an explicit PG_URL=... still wins.
+	_ = godotenv.Load("../.env", ".env")
+
+	// Decide whether the database is REQUIRED for this run. The rule keeps a fresh
+	// scaffold green while refusing to let a real, DB-backed project pass without
+	// actually touching the database:
+	//
+	//   - SKIP_DB=1                       -> explicit opt-out; skip DB setup (only
+	//                                        the file-based gates run). Use for a
+	//                                        lint-only check or a host with no Postgres.
+	//   - no create_tables.sql            -> fresh scaffold; there are no DB-backed
+	//                                        tests yet, so skipping is honest, not masking.
+	//   - create_tables.sql but no PG_URL -> FAIL. A schema means this is a DB-backed
+	//                                        project; a dropped/forgotten PG_URL must
+	//                                        not silently turn the DB suite into a no-op.
+	//
+	// Anything past this block requires a reachable database; connection failures fail.
 	pgURL := os.Getenv("PG_URL")
-	if pgURL == "" {
-		// No database configured: run only the file-based tests.
-		fmt.Fprintln(os.Stderr, "PG_URL not set — skipping DB setup; DB-dependent tests will skip.")
+	_, schemaErr := os.Stat("../" + schemaFile)
+	schemaExists := schemaErr == nil
+
+	switch {
+	case os.Getenv("SKIP_DB") == "1":
+		fmt.Fprintln(os.Stderr, "SKIP_DB=1 — skipping DB setup; DB-dependent tests will skip.")
 		return m.Run()
+	case !schemaExists:
+		fmt.Fprintf(os.Stderr, "%s not present yet — no DB-backed tests to run; skipping DB setup.\n", schemaFile)
+		return m.Run()
+	case pgURL == "":
+		fmt.Fprintf(os.Stderr,
+			"%s exists but PG_URL is not set. DB-backed tests are required once the project has a schema.\n"+
+				"Set PG_URL (setup_dev.sh writes it to .env), or pass SKIP_DB=1 to run only the file-based gates.\n",
+			schemaFile)
+		return 1
 	}
 
 	// Connect to the postgres system DB to manage the test DB lifecycle.
