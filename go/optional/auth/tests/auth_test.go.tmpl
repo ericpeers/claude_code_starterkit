@@ -1,0 +1,223 @@
+// SPDX-License-Identifier: MIT
+
+package tests
+
+// DB-backed tests for the auth module. They reuse the kit's tests/ harness:
+// TestMain (setup_test.go) builds an ephemeral database, applies create_tables.sql
+// (which seeds admin@example.com with a NULL password), and exposes testPool. Each
+// test skips when testPool is nil (no PG_URL), so a lint-only run stays green.
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"example.com/app/optional/auth/internal/handlers"
+	"example.com/app/optional/auth/internal/middleware"
+	"example.com/app/optional/auth/internal/models"
+	"example.com/app/optional/auth/internal/repository"
+	"example.com/app/optional/auth/internal/services"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	testJWTSecret = "test-secret-not-for-production"
+	adminEmail    = "admin@example.com"
+	adminPass     = "correct-horse-battery-staple"
+)
+
+// seedAdminPassword sets a known bcrypt password on the seeded admin row so the
+// login flow can be exercised (the schema seeds the row with a NULL password).
+func seedAdminPassword(t *testing.T) {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if _, err := testPool.Exec(context.Background(),
+		`UPDATE users SET passwd = $1 WHERE email = $2`, string(hash), adminEmail); err != nil {
+		t.Fatalf("seed admin password: %v", err)
+	}
+}
+
+// newAuthRouter wires the same middleware + routes a real main.go would, plus a
+// throwaway admin-only route to exercise RequireAdmin.
+func newAuthRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	repo := repository.NewUserRepository(testPool)
+	svc := services.NewAuthService(repo, testJWTSecret)
+	h := handlers.NewAuthHandler(svc)
+
+	r := gin.New()
+	r.Use(middleware.ValidateUser([]byte(testJWTSecret)))
+	v1 := r.Group("/api/v1")
+	a := v1.Group("/auth")
+	a.POST("/login", h.Login)
+	a.GET("/me", middleware.RequireAuth(), h.Me)
+	admin := v1.Group("/admin")
+	admin.Use(middleware.RequireAuth(), middleware.RequireAdmin())
+	admin.GET("/ping", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	return r
+}
+
+func doLogin(r *gin.Engine, email, pass string) *httptest.ResponseRecorder {
+	body, _ := json.Marshal(models.LoginRequest{Email: email, Password: pass})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestAuthLoginSuccessAndProtectedAccess(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no test database configured (PG_URL unset)")
+	}
+	seedAdminPassword(t)
+	r := newAuthRouter()
+
+	w := doLogin(r, adminEmail, adminPass)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login: got %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	var resp models.AuthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	if resp.Token == "" {
+		t.Fatal("login returned an empty token")
+	}
+	if resp.User.Email != adminEmail || resp.User.Role != models.RoleAdmin {
+		t.Fatalf("unexpected user in response: %+v", resp.User)
+	}
+
+	// The admin token authorizes both /me and the admin-only route.
+	for _, path := range []string{"/api/v1/auth/me", "/api/v1/admin/ping"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+resp.Token)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK && rec.Code != http.StatusNoContent {
+			t.Errorf("GET %s with admin token: got %d, want 2xx (body: %s)", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestAuthLoginBadCredentials(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no test database configured (PG_URL unset)")
+	}
+	seedAdminPassword(t)
+	r := newAuthRouter()
+
+	if w := doLogin(r, adminEmail, "wrong-password"); w.Code != http.StatusUnauthorized {
+		t.Errorf("wrong password: got %d, want 401", w.Code)
+	}
+	if w := doLogin(r, "nobody@example.com", adminPass); w.Code != http.StatusUnauthorized {
+		t.Errorf("unknown email: got %d, want 401", w.Code)
+	}
+}
+
+func TestAuthProtectedRouteRequiresToken(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no test database configured (PG_URL unset)")
+	}
+	r := newAuthRouter()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("no token on protected route: got %d, want 401", w.Code)
+	}
+}
+
+func TestAuthLoginNullPasswordRejected(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no test database configured (PG_URL unset)")
+	}
+	// The schema seeds the admin row with a NULL password (inert until set). Force
+	// it back to NULL — an earlier test may have seeded it — then confirm login
+	// fails closed rather than matching GetByEmail's empty COALESCE fallback.
+	if _, err := testPool.Exec(context.Background(),
+		`UPDATE users SET passwd = NULL WHERE email = $1`, adminEmail); err != nil {
+		t.Fatalf("clear admin password: %v", err)
+	}
+	r := newAuthRouter()
+
+	if w := doLogin(r, adminEmail, "anything"); w.Code != http.StatusUnauthorized {
+		t.Errorf("login against NULL-password admin: got %d, want 401 (body: %s)", w.Code, w.Body.String())
+	}
+}
+
+func TestAuthProtectedRouteRejectsInvalidToken(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no test database configured (PG_URL unset)")
+	}
+	r := newAuthRouter()
+
+	// ValidateUser is permissive (it passes bad tokens through); RequireAuth is the
+	// half that must turn a missing/invalid identity into a 401. Cover both a
+	// malformed token and a well-formed but expired one.
+	expired := makeTokenWithTTL(t, 1, models.RoleAdmin, -time.Hour)
+	for name, tok := range map[string]string{"malformed": "not-a-real-jwt", "expired": expired} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+		req.Header.Set("Authorization", "Bearer "+tok)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s token on protected route: got %d, want 401", name, w.Code)
+		}
+	}
+}
+
+func TestAuthAdminRouteForbidsNonAdmin(t *testing.T) {
+	if testPool == nil {
+		t.Skip("no test database configured (PG_URL unset)")
+	}
+	var userID int64
+	if err := testPool.QueryRow(context.Background(),
+		`INSERT INTO users (name, email, role) VALUES ('Reg', 'user@example.com', 'USER') RETURNING id`,
+	).Scan(&userID); err != nil {
+		t.Fatalf("insert non-admin user: %v", err)
+	}
+
+	r := newAuthRouter()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/ping", nil)
+	req.Header.Set("Authorization", "Bearer "+makeToken(t, userID, models.RoleUser))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("non-admin on admin route: got %d, want 403", w.Code)
+	}
+}
+
+// makeToken signs a JWT with the test secret, mirroring what the service issues.
+func makeToken(t *testing.T, userID int64, role string) string {
+	return makeTokenWithTTL(t, userID, role, time.Hour)
+}
+
+// makeTokenWithTTL signs a JWT that expires ttl from now. A negative ttl yields an
+// already-expired token, used to exercise the rejection path.
+func makeTokenWithTTL(t *testing.T, userID int64, role string, ttl time.Duration) string {
+	t.Helper()
+	claims := models.JWTClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+		UserID: userID,
+		Role:   role,
+	}
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(testJWTSecret))
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
+	return signed
+}

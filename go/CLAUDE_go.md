@@ -48,6 +48,12 @@ if cfg.EnableSwagger {                 // ENABLE_SWAGGER
 }
 ```
 
+**Optional auth.** Need login + protected endpoints? The kit ships an opt-in
+JWT + bcrypt-password module under `optional/auth/` (in the starter kit, not
+copied into a scaffold by default). Run its `install.sh` to drop the middleware,
+service, repository, `users` schema, and `bin/login` into place. See
+`optional/auth/README.md` and the "Optional: auth module" section of `SCAFFOLD.md`.
+
 ## Logging
 
 One logger for the whole app: `logrus`, configured once at startup, used

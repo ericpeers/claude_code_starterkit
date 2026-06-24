@@ -138,6 +138,37 @@ exactly why step 1 collects the holder up front.
   or prompts for the existing password and, only if none works (e.g. a peer-auth
   role with no TCP password), offers to generate and set one with explicit consent.
 
+#### Optional: auth module
+* **When to offer it.** If the user wants login + protected endpoints (a JWT auth
+  pipeline), the kit ships an opt-in module at `KIT/go/optional/auth/`. It is
+  **not** part of the default go copy set above — install it only when asked. It
+  provides self-issued **JWT + bcrypt-password** auth: `POST /api/v1/auth/login`,
+  a `GET /api/v1/auth/me` example, `RequireAuth`/`RequireAdmin` middleware, a
+  `users` table with a seeded admin, and `bin/login`. It is deliberately
+  core-only — no self-service registration, admin-approval, organizations, or
+  external OAuth/OIDC provider.
+* **Install.** From `DEST`, run `KIT/go/optional/auth/install.sh .` (after the
+  base go scaffold exists and `go.mod` has its real module path). It copies the
+  Go files into `internal/…` (rewriting the import prefix to `DEST`'s module),
+  renders `tests/auth_test.go`, drops `bin/*` + `scripts/setup_admin.sh`, appends
+  the auth vars to `.env_sample`, installs `create_tables.sql` (or tells you to
+  merge `optional/auth/schema/auth_tables.sql` if one already exists), and runs
+  `go mod tidy`. Idempotent.
+* **Two wiring edits** (the agent performs these; full snippets in
+  `optional/auth/README.md`):
+  1. `main.go` — mount `middleware.ValidateUser([]byte(cfg.JWTSecret))` globally,
+     add the `/auth/login` + `/auth/me` routes (and any `RequireAuth`/`RequireAdmin`
+     groups for your own endpoints), and add the swagger BearerAuth security
+     definition (`@securityDefinitions.apikey BearerAuth` / `@in header` /
+     `@name Authorization`).
+  2. `setup_dev.sh` — after the schema-apply phase add
+     `[ -f scripts/setup_admin.sh ] && source scripts/setup_admin.sh`, which
+     generates `ADMIN_PASS` and sets the seeded admin's password on first run.
+* **Notes.** `bin/login` reads `ADMIN_EMAIL`/`ADMIN_PASS` from `.env`. `ADMIN_EMAIL`
+  must match the row seeded in `create_tables.sql` (`admin@example.com` by default).
+  If the generated app already defines `models.ErrorResponse`, delete the module's
+  `internal/models/errors.go` after install.
+
 ### python
 * Copy: `CLAUDE_python.md`, `setup_dev.sh`, `requirements.txt`,
   `pyrightconfig.json`, `pytest.ini`, `vulture_whitelist.py`, `.env_sample`,
