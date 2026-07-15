@@ -26,7 +26,8 @@ For each file in the diff, read the entire file's changes, then apply every rule
 1. Are magic numbers that represent business rules or domain thresholds (regulatory limits, rate caps, timeouts, age/size boundaries) named as constants? Implementation-detail literals (byte offsets, fixed field widths, array indices) are acceptable with an inline comment instead.
 1. [cross-file] Does the code follow the same naming patterns used elsewhere? E.g. is it a "userId" and not an "id".
 1. Do variable names express a complete thought? Flag names that read as partial phrases
-1. Does the code prefer a named function or method over a closure (anonymous function / lambda)? A closure is acceptable only when accompanied by a comment justifying why a named function won't do (e.g. it must capture local state that can't be cleanly passed as a parameter). Flag any closure that lacks such a justifying comment.
+1. Does the code prefer a named function or method over a closure (anonymous function / lambda)? Closures should be avoided unless an inline or helper function would overly complicate the code. A closure is acceptable only when accompanied by a comment justifying why an inline or helper function won't do (e.g. it must capture local state that can't be cleanly passed as a parameter). Flag any closure that lacks such a justifying comment.
+1. Is the code free of continuation-based programming? Flag any pattern that passes a function to be partially evaluated and then returns data to a new function (continuation-passing style). Prefer straight-line code that computes a value and returns it directly over threading control through passed-in continuations.
 
 ### General: Correctness
 
@@ -45,6 +46,7 @@ For each file in the diff, read the entire file's changes, then apply every rule
 1. [cross-file] Does the code reuse existing functions rather than duplicating similar logic that exists elsewhere?
 1. Does the code keep concerns within the correct file? E.g. model code should not appear in a repository file.
 1. Is production code free of changes that exist solely to accommodate testing?
+1. Does the code avoid splitting what should be a single atomic update across multiple HTTP endpoints? Data that must be written together should not be spread across separate requests — even if it lives in two tables — because the requests can arrive out of order or partially fail. Flag such splits and recommend a single HTTP endpoint that consolidates the writes inside one Postgres transaction so the update is atomic.
 
 ### Language: JavaScript / React
 Apply only when reviewing *.ts, *.tsx
