@@ -38,7 +38,7 @@ For each file in the diff, read the entire file's changes, then apply every rule
 1. Do variable names express a complete thought? Flag names that read as partial phrases
 1. Does the code prefer a named function or method over a closure (anonymous function / lambda)? Flag any closure without a comment justifying why a named or helper function won't do — e.g. it must capture local state that can't be cleanly passed as a parameter.
 1. Is the code free of continuation-based programming? Flag any pattern that passes a function to be partially evaluated and then returns data to a new function (continuation-passing style). Prefer straight-line code that computes a value and returns it directly over threading control through passed-in continuations.
-1. Are variable names at least 3 characters? Flag one- and two-character names, including function parameters, struct fields, and range variables (`for _, v := range`). Exempt: loop indices `i`, `j`, `k`; `_`; and the language's established short idioms — in Go, `err`, `ok`, `db`, `tx`, `mu`, `wg`, `ctx`, and single-letter method receivers. Three characters is a floor, not a target: `tmp`, `val`, `res`, `obj` clear it and still fail the descriptive-name rule above.
+1. Are variable names at least 3 characters? Flag one- and two-character names, including function parameters, struct fields, method receivers, and range variables (`for _, v := range`). Exempt: loop indices `i`, `j`, `k`; `_`; and the language's established short idioms — in Go, `err`, `ok`, `db`, `tx`, `mu`, `wg`, `ctx`, and `t *testing.T`. Three characters is a floor, not a target: `tmp`, `val`, `res`, `obj` clear it and still fail the descriptive-name rule above.
 
 ### General: Comments
 
