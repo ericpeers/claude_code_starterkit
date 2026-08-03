@@ -11,15 +11,13 @@ When reviewing code, start with the changes to be reviewed. If the user specifie
 2. Use git to check for whether there are unstaged changes. If there is source code that is not tracked, add it to the list to review, but remind the user it is not currently staged
 
 
-## Review by reading; run only to confirm a finding
+## Review by reading first; linting second; specific tests only to confirm a finding
+Do not open the review by running test suites and end to end tests. 
 
-Read the code first. Do NOT open the review by running tests, linters, formatters, builds, compilers, type-checkers, or coverage tools, and do not run them as a sweep to look for problems. That includes `go test`/`vet`/`build`, `golangci-lint`, `gofmt`, `npm`/`yarn`/`pnpm` scripts, `tsc`, `eslint`, `prettier`, `pytest`, `ruff`, `mypy`, `black`, and `make`. Finding problems is what the rules below are for; a full suite or repo-wide lint pass costs far more than it tells you, and the user has usually run it already.
+1) Read the code first. Reading files outside the diff is always fine and is expected — the [cross-file] rules require it.
+2) Run fast linters and static checks as needed
+3) Once a finding exists, if you need to run a narrowly scoped command, that takes no more than a few seconds, then run it. If it disproves the finding, drop the finding rather than reporting it hedged. If confirming would take a broad or slow run, ask for permission to run the larger test. 
 
-Once a specific finding already exists — you have the file, the line, and the claim — you may run a command narrowly scoped to that finding to confirm or kill it: the one test, the linter on the one file, a compile of the one package. Scope it as tightly as the tool allows. Never the whole suite, never the whole repo, never "while I'm here".
-
-Report what the run showed either way. If it disproves the finding, drop the finding rather than reporting it hedged. If confirming would take a broad or slow run, skip the run: report the finding as unverified and name the command the user should run.
-
-Reading files outside the diff is always fine and is expected — the [cross-file] rules require it.
 
 ## What to look for
 
@@ -31,24 +29,22 @@ For each file in the diff, read the entire file's changes, then apply every rule
 
 1. Is the code concise?
 1. Does the code use descriptive variable names? Check if a variable is named to affect control flow but doesn't have the intended impact. In refactors or parallelization efforts, check if original variables need a substring added.
-1. Do functions have comments? For 50+ line functions, do they describe the "what" and the "why" of the function?
-1. Do major sections of code have comments? If the code is complicated, does it have comments throughout, walking the reader through the flow?
+1. Do functions have comments? For 50+ line functions, do they describe the "what" and the "why" of the function in no more than 3-4 lines?
+1. Do major sections of code have comments? If the code is complicated, does it have 1-2 line comments every 10-20 lines, walking the reader through the flow?
 1. Are magic numbers that represent business rules or domain thresholds (regulatory limits, rate caps, timeouts, age/size boundaries) named as constants? Implementation-detail literals (byte offsets, fixed field widths, array indices) are acceptable with an inline comment instead.
 1. [cross-file] Does the code follow the same naming patterns used elsewhere? E.g. is it a "userId" and not an "id".
 1. Do variable names express a complete thought? Flag names that read as partial phrases
 1. Does the code prefer a named function or method over a closure (anonymous function / lambda)? Flag any closure without a comment justifying why a named or helper function won't do — e.g. it must capture local state that can't be cleanly passed as a parameter.
 1. Is the code free of continuation-based programming? Flag any pattern that passes a function to be partially evaluated and then returns data to a new function (continuation-passing style). Prefer straight-line code that computes a value and returns it directly over threading control through passed-in continuations.
-1. Are variable names at least 3 characters? Flag one- and two-character names, including function parameters, struct fields, method receivers, and range variables (`for _, v := range`). Exempt: loop indices `i`, `j`, `k`; `_`; and the language's established short idioms — in Go, `err`, `ok`, `db`, `tx`, `mu`, `wg`, `ctx`, and `t *testing.T`. Three characters is a floor, not a target: `tmp`, `val`, `res`, `obj` clear it and still fail the descriptive-name rule above.
+1. Are variable names at least 3 characters? Flag one- and two-character names. Exempt: loop indices `i`, `j`, `k`; `_`; and the language's established short idioms.
 
 ### General: Comments
-
-Comments explain code. They are not a design document, an argument, or a place to pre-litigate a review. Apply these to every comment in the diff, including doc comments on constants, fields, functions, types, and packages.
 
 1. Is each comment proportional to the code it documents? Flag as too long: more than 5 comment lines on a single constant, variable, or struct field; more than 15 on a function or type; more than 20 at file or package level. Also flag any reviewed file where total comment lines outnumber code lines. Quote the count and the declaration, and say which sentences to cut.
 1. If a single declaration needs a long explanation, that is a design smell rather than good documentation — the declaration is usually carrying too much. Flag it and recommend one of two fixes: simplify the design, or move the reasoning to a design doc and leave a one-line comment pointing at it.
 1. Does the comment state the decision instead of arguing for it? Flag persuasive or defensive prose: pre-empting objections nobody raised, rebutting alternatives nobody proposed, restating a point for emphasis, or rhetorical framing ("this is load-bearing, not a tuning constant"). One or two sentences of "why" is the budget.
 1. Are comments free of ALL-CAPS words used for emphasis? Flag each one. If a point needs shouting to land, the naming or the structure should be carrying it instead.
-1. Does the comment describe this code rather than other code? Flag comparative narrative about unrelated implementations elsewhere ("not to be confused with X in path/y.go, which does the opposite"). A cross-reference is one line naming the file; more than that duplicates knowledge into two places that will disagree later.
+1. Does the comment describe this code rather than other code? Flag narrative about unrelated implementations elsewhere ("not to be confused with X in path/y.go, which does the opposite"). A cross-reference is one line naming the file; more than that duplicates knowledge into two places that will disagree later.
 1. Is the comment free of restating what the code already says? Flag any comment that adds nothing beyond the name, signature, or single line that follows it.
 1. Does a comment justify keeping code that it also says cannot be reached? A comment explaining why dead-but-defensive code is retained is an argument for deleting the code. Flag the code, not just the comment.
 1. Are comments free of these banned words, any capitalization or inflection? `genuine` · `real` · `win` · `grounded` · `honest` · `load-bearing` · `meaningfully` · `foot-gun`. They mark a comment insisting rather than informing; deleting the sentence is usually the fix, not a synonym. Exempt only when quoting a name the code doesn't control (`X-Real-IP`).
@@ -97,3 +93,4 @@ Apply only when reviewing *.sh, *.py, *.pl files
 1. Each complaint should have source code file, line number, a brief description of the problem, with a suggested fix.
 1. If a file has no violations, omit it from the report entirely
 1. Do not emit items that conclude "no issue", "this is fine", "safe", "acceptable". 
+1. The report contains violations only, and this applies to the entire response — not just the numbered list. Never mention code you considered and decided not to flag: no "not flagged", "for the record", "worth noting", closing sections, asides, or explanations of why a rule did not fire. A dropped or disproven finding must not appear in the output in any form. If nothing violates any rule, the entire report is one line saying no violations were found.
