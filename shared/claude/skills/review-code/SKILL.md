@@ -7,7 +7,7 @@ description : Performs a code review of the current changes. Use when code is co
 
 ## Identifying changes to review
 When reviewing code, start with the changes to be reviewed. If the user specifies a changeset or a specific file, constrain the review to that file or changeset. Otherwise, look for files that are locally modified or about to be committed:
-1. Use git to check for staged changes: add them to the list of files to review. Do review source code (.go, .ts, .py, .sql). Don't review .md
+1. Use git to check for staged changes: add them to the list of files to review. Do review source code (.go, .ts, .py, .sql). For markdown and documentation, apply only the General: Comments rules — skip Clarity, Correctness, and Design.
 2. Use git to check for whether there are unstaged changes. If there is source code that is not tracked, add it to the list to review, but remind the user it is not currently staged
 
 
@@ -40,14 +40,15 @@ For each file in the diff, read the entire file's changes, then apply every rule
 
 ### General: Comments
 
-1. Is each comment proportional to the code it documents? Flag as too long: more than 5 comment lines on a single constant, variable, or struct field; more than 15 on a function or type; more than 20 at file or package level. Also flag any reviewed file where total comment lines outnumber code lines. Quote the count and the declaration, and say which sentences to cut.
+1. Is each comment proportional to the code it documents? Flag as too long: more than 5 comment lines on a single constant, variable, or struct field; more than 15 on a function or type; more than 20 at file or package level. Also flag any reviewed source file where total comment lines outnumber code lines. Quote the count and the declaration, and say which sentences to cut.
 1. If a single declaration needs a long explanation, that is a design smell rather than good documentation — the declaration is usually carrying too much. Flag it and recommend one of two fixes: simplify the design, or move the reasoning to a design doc and leave a one-line comment pointing at it.
 1. Does the comment state the decision instead of arguing for it? Flag persuasive or defensive prose: pre-empting objections nobody raised, rebutting alternatives nobody proposed, restating a point for emphasis, or rhetorical framing ("this is load-bearing, not a tuning constant"). One or two sentences of "why" is the budget.
 1. Are comments free of ALL-CAPS words used for emphasis? Flag each one. If a point needs shouting to land, the naming or the structure should be carrying it instead.
 1. Does the comment describe this code rather than other code? Flag narrative about unrelated implementations elsewhere ("not to be confused with X in path/y.go, which does the opposite"). A cross-reference is one line naming the file; more than that duplicates knowledge into two places that will disagree later.
 1. Is the comment free of restating what the code already says? Flag any comment that adds nothing beyond the name, signature, or single line that follows it.
 1. Does a comment justify keeping code that it also says cannot be reached? A comment explaining why dead-but-defensive code is retained is an argument for deleting the code. Flag the code, not just the comment.
-1. Are comments free of these banned words, any capitalization or inflection? `genuine` · `real` · `win` · `grounded` · `honest` · `load-bearing` · `meaningfully` · `foot-gun`. They mark a comment insisting rather than informing; deleting the sentence is usually the fix, not a synonym. Exempt only when quoting a name the code doesn't control (`X-Real-IP`).
+1. Are comments free of these banned words and phrases, any capitalization or inflection? `by design` · `genuine` · `real` · `win` · `grounded` · `honest` · `load-bearing` · `meaningfully` · `foot-gun`. They mark a comment insisting rather than informing; deleting the sentence is usually the fix, not a synonym. Exempt only when quoting a name the code doesn't control (`X-Real-IP`).
+1. Are the sentences short enough to read once? Target 10-15 words. Flag any sentence over 25 words. Flag any sentence with two or more em dashes or parentheticals. Flag any paragraph where commas outnumber periods. The fix is to break the clause chain into separate sentences. A parenthetical that carries content becomes its own sentence. Quote the offending sentence and give the split version. This rule covers markdown prose as much as code comments. Fenced code blocks and ASCII diagrams are exempt.
 
 ### General: Correctness
 
@@ -60,13 +61,13 @@ For each file in the diff, read the entire file's changes, then apply every rule
 
 ### General: Design
 
-1. If the code adds to a function longer than 300 lines, is there a todo.md item to address it?
-1. Are the architectural tradeoffs written down? Prefer a design doc or todo.md with a one-line comment pointing at it; a short comment is fine when the tradeoff is local to one declaration. Flag tradeoffs that are recorded nowhere, and flag tradeoffs that grew into multi-paragraph comments instead of a doc (see General: Comments).
+1. If the code adds to a function longer than 300 lines, has the human manually added a todo.md item to address it?
+1. Are the architectural tradeoffs written down? Prefer a design doc with a one-line comment pointing at it; a short comment is fine when the tradeoff is local to one declaration. Flag tradeoffs that are recorded nowhere, and flag tradeoffs that grew into multi-paragraph comments instead of a doc (see General: Comments).
 1. Was a test added as part of this change? If not and one should be added, recommend (in 2-3 sentences) what the test should do.
 1. [cross-file] Does the code reuse existing functions rather than duplicating similar logic that exists elsewhere?
 1. Does the code keep concerns within the correct file? E.g. model code should not appear in a repository file.
 1. Is production code free of changes that exist solely to accommodate testing?
-1. Does any comment admit the code breaks a rule, norm, or convention — and then the code does it anyway? Flag every one, however convincing the stated reason. Signals: "normally worth avoiding", "not ideal", "we shouldn't", "this is a hack", "technically wrong but", "the tradeoff is taken deliberately", "an accepted gap". The author's own justification is not review approval. Report the line, the rule broken, and the reason given; ask the user to accept it explicitly or add a todo.md item.
+1. Does any comment admit the code breaks a rule, norm, or convention — and then the code does it anyway? Flag every one, however convincing the stated reason. Signals: "normally worth avoiding", "not ideal", "we shouldn't", "this is a hack", "technically wrong but", "the tradeoff is taken deliberately", "an accepted gap". The author's own justification is not review approval. Report the line, the rule broken, and the reason given; ask the human to accept it explicitly or to manually add a todo.md item.
 1. Does the code avoid splitting what should be a single atomic update across multiple HTTP endpoints? Separate requests can arrive out of order or partially fail, and living in two tables is not a reason to split. Flag such splits and recommend one endpoint that consolidates the writes in a single Postgres transaction.
 
 ### Language: JavaScript / React
