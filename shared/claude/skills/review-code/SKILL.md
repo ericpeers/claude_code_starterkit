@@ -71,8 +71,9 @@ For each file in the diff, read the entire file's changes, then apply every rule
 1. Does the code avoid splitting what should be a single atomic update across multiple HTTP endpoints? Separate requests can arrive out of order or partially fail, and living in two tables is not a reason to split. Flag such splits and recommend one endpoint that consolidates the writes in a single Postgres transaction.
 
 ### General: Tests
-1. Does a test check something that its own comments describe as wrong, temporary, or "current"?
+1. Does a test check something that its own comments describe as wrong, temporary, or "current"? Does a test greenlight what should be a failure just because it is current behavior? Flag if so.
 1. Does a test check a number the code reported, when the underlying fact could have been read directly instead?
+
 
 
 ### Language: JavaScript / React
