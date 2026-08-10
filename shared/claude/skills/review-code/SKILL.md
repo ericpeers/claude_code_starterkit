@@ -70,6 +70,11 @@ For each file in the diff, read the entire file's changes, then apply every rule
 1. Does any comment admit the code breaks a rule, norm, or convention — and then the code does it anyway? Flag every one, however convincing the stated reason. Signals: "normally worth avoiding", "not ideal", "we shouldn't", "this is a hack", "technically wrong but", "the tradeoff is taken deliberately", "an accepted gap". The author's own justification is not review approval. Report the line, the rule broken, and the reason given; ask the human to accept it explicitly or to manually add a todo.md item.
 1. Does the code avoid splitting what should be a single atomic update across multiple HTTP endpoints? Separate requests can arrive out of order or partially fail, and living in two tables is not a reason to split. Flag such splits and recommend one endpoint that consolidates the writes in a single Postgres transaction.
 
+### General: Tests
+1. Does a test check something that its own comments describe as wrong, temporary, or "current"?
+1. Does a test check a number the code reported, when the underlying fact could have been read directly instead?
+
+
 ### Language: JavaScript / React
 Apply only when reviewing *.ts, *.tsx
 
