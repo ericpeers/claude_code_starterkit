@@ -27,8 +27,8 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// UserDTO is the public representation of a user. It never carries the password
-// hash, so it is safe to embed in responses and JWT-adjacent payloads.
+// UserDTO is the public representation of a user. It omits the password hash,
+// so it can be embedded in responses and JWT-adjacent payloads.
 type UserDTO struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`

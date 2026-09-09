@@ -3,8 +3,9 @@
 -- enum. install.sh copies this to create_tables.sql when you don't have one yet;
 -- otherwise merge these statements into your existing create_tables.sql.
 --
--- Keep this DDL free of `IF NOT EXISTS` (CREATE TYPE can't express it); setup_dev.sh
--- only applies create_tables.sql to an empty public schema, so re-runs never reapply.
+-- Keep this DDL free of `IF NOT EXISTS`, which CREATE TYPE has no form for.
+-- setup_dev.sh applies create_tables.sql only to an empty public schema, so a
+-- re-run does not reapply the DDL.
 
 CREATE TYPE user_role AS ENUM ('USER', 'ADMIN');
 
@@ -20,5 +21,5 @@ CREATE TABLE users (
 
 -- Bootstrap admin. The password is set after the schema is applied, by
 -- scripts/setup_admin.sh (which calls bin/set_admin_password.py). Until then
--- passwd is NULL and login is impossible, so the seeded row is inert.
+-- passwd is NULL and login is refused, so the seeded row is inert.
 INSERT INTO users (name, email, role) VALUES ('Admin', 'admin@example.com', 'ADMIN');

@@ -18,7 +18,7 @@ import (
 const tokenTTL = 24 * time.Hour
 
 // ErrInvalidCredentials is returned for both an unknown email and a wrong
-// password, so the API never reveals which one was wrong.
+// password, so the response does not distinguish the two.
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
 type AuthService struct {

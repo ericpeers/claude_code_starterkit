@@ -53,6 +53,45 @@ earlier read; both go stale. Every factual claim, including closing summary
 notes, must be verified with a tool *before* you state it. Checking is your job,
 not a question to hand back to the user.
 
+## Comment style
+
+Comments are for the next reader of the file, not for the reviewer of the PR.
+These rules also cover prose under `docs/` and answers written back to the author.
+
+* **Budget.** An exported symbol gets 1-3 sentences. A helper gets one line, and
+  most statements get none. A block over ~6 lines belongs in `docs/`, with a
+  one-line pointer at the declaration.
+* **First sentence states what the thing is** (the godoc convention). One more
+  sentence may state a constraint the name does not show. Stop there.
+* **Plain vocabulary.** No jargon, and no metaphors such as "burns down the
+  budget".
+* **Banned vocabulary:** `by design`, `foot-gun`, `genuine`, `grounded`,
+  `honest`, `load-bearing`, `meaningfully`, `oracle`, `pins`, `real`, `venue`,
+  `win`, and their inflections. Exempt only a proper name the code does not
+  control (`X-Real-IP`) or a settled term of art (`last-write-wins`). Add your
+  project's own domain vocabulary to the exemption list, with a reason per term.
+* **Delete a banned word, do not swap in a synonym.** "Actual" for `real` keeps
+  the problem. Where the word carried something, say what the code does instead.
+* **Short sentences.** Aim for 10-15 words, one idea each. Prefer a period over a
+  comma, semicolon, colon, or em dash. Two em dashes in a paragraph means rewrite.
+* **No absolute claims.** Do not write `never`, `cannot`, `impossible`, or
+  `guarantees` about code. They overstate what the code enforces. Say what the
+  code does. Instruction documents are exempt, since the words read as orders
+  there.
+* **No cross-references to other symbols,** such as "see shouldConsume". They go
+  stale in silence when the target moves or is renamed.
+* **Shorten by deleting paragraphs, not by fusing lists into prose.** A bulleted
+  list of parameters beats one comma-spliced sentence.
+* **Identifiers go in parentheses, not mid-sentence.** A sentence should read as
+  English without decoding code names. Write "the row is held until payment
+  settles (`holds.expires_at`)".
+* **Capitalization.** Do not capitalize or bold a comment for emphasis, and drop
+  ALL-CAPS words.
+* **No prompt residue.** Do not transcribe the task brief into the code.
+
+The Go stack ships three gates that enforce the mechanical parts of this. See
+*Comment-style gates* in `go/CLAUDE_go.md`.
+
 ## Code review: no positive commentary
 
 In code reviews, report only actionable problems. Drop any item that concludes

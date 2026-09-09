@@ -4,21 +4,23 @@ package tests
 
 // Ephemeral test-database lifecycle with a production-data safety guard.
 //
-// One suite, one command: `go test ./tests/` runs everything — the file-based
-// gates AND these DB-backed tests — every time, with no build tags to remember.
+// One suite, one command. `go test ./tests/` runs everything every time: the
+// file-based gates and these DB-backed tests. There are no build tags.
 //
-// The database is REQUIRED as soon as the project has a schema, so a dropped
-// PG_URL fails loudly instead of silently skipping the DB suite (see runTests for
-// the exact rule). A fresh scaffold (no create_tables.sql yet) still passes with
-// no database, and SKIP_DB=1 is an explicit opt-out for lint-only runs.
+// The database is required as soon as the project has a schema. A dropped
+// PG_URL then fails loudly rather than skipping the DB suite in silence.
+// runTests holds the exact rule. A fresh scaffold has no create_tables.sql yet,
+// so it still passes with no database. SKIP_DB=1 is the opt-out for a
+// lint-only run.
 //
-// TestMain creates a throwaway database (drops any orphan first), applies your
-// schema, asserts it does NOT look like production, then runs the suite and
-// drops the database. Tests share the package-level testPool.
+// TestMain creates a throwaway database, dropping any orphan first. It applies
+// your schema and asserts the result does not look like production. It then runs
+// the suite and drops the database. Tests share the package-level testPool.
 //
 // Customize:
 //   - testDBName                  : name of the ephemeral database
-//   - productionRowThreshold      : row count above which we assume real data
+//   - productionRowThreshold      : row count above which the guard assumes
+//                                    production data
 //   - guardTable                  : a core table to count rows of in the guard
 //   - seed*()                     : add your own synthetic seed functions here
 
@@ -52,22 +54,20 @@ func TestMain(m *testing.M) {
 func runTests(m *testing.M) int {
 	ctx := context.Background()
 
-	// Load .env (repo root, one level above tests/) so a single `go test ./tests/`
-	// picks up PG_URL without the developer exporting it — this is what makes the
-	// DB-backed tests part of the everyday run. godotenv never overrides a variable
-	// already set in the shell, so an explicit PG_URL=... still wins.
+	// Load .env from the repo root so `go test ./tests/` picks up PG_URL with
+	// nothing exported by hand. A shell variable already set takes precedence.
 	_ = godotenv.Load("../.env", ".env")
 
-	// Decide whether the database is REQUIRED for this run. The rule keeps a fresh
-	// scaffold green while refusing to let a real, DB-backed project pass without
-	// actually touching the database:
+	// Decide whether the database is required for this run. The rule keeps a
+	// fresh scaffold green, and stops a DB-backed project passing without
+	// touching the database:
 	//
 	//   - SKIP_DB=1                       -> explicit opt-out; skip DB setup (only
 	//                                        the file-based gates run). Use for a
 	//                                        lint-only check or a host with no Postgres.
 	//   - no create_tables.sql            -> fresh scaffold; there are no DB-backed
-	//                                        tests yet, so skipping is honest, not masking.
-	//   - create_tables.sql but no PG_URL -> FAIL. A schema means this is a DB-backed
+	//                                        tests yet, so nothing is masked.
+	//   - create_tables.sql but no PG_URL -> the run fails. A schema means this is a DB-backed
 	//                                        project; a dropped/forgotten PG_URL must
 	//                                        not silently turn the DB suite into a no-op.
 	//

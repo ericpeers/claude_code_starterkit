@@ -78,15 +78,19 @@ exactly why step 1 collects the holder up front.
 
 ### go
 * Copy: `CLAUDE_go.md`, `go.mod`, `go.sum`, `Makefile`, `setup_dev.sh`,
-  `.env_sample`, `staticcheck.conf`, `.sqlfluff`,
-  `tests/` (`quality_test.go`, `copyright_test.go`, `swagger_naming_test.go`,
-  `setup_test.go`, `schema_test.go` — one suite, no build tags; DB-backed tests
-  skip on a fresh scaffold but become required once `create_tables.sql` exists,
-  with `SKIP_DB=1` as an explicit opt-out),
-  and the `internal/` building blocks: `internal/middleware/gin_logger.go`
-  (logrus-backed Gin request logger) and `internal/swagger/swagger.go`
-  (mounts the Swagger UI). These give the generated app a single logging path
-  and Swagger out of the box — see CLAUDE_go.md "Default HTTP stack". Also copy
+  `.env_sample`, `staticcheck.conf`, `.sqlfluff`, `tests/`, and the `internal/`
+  building blocks `internal/middleware/gin_logger.go` (logrus-backed Gin request
+  logger) and `internal/swagger/swagger.go` (mounts the Swagger UI). Those two
+  give the generated app a single logging path and Swagger out of the box. See
+  CLAUDE_go.md "Default HTTP stack".
+* `tests/` holds `quality_test.go`, `copyright_test.go`,
+  `swagger_naming_test.go`, `setup_test.go`, `schema_test.go`, and the
+  comment-style gates `comment_style_test.go`, `comment_scan_test.go`, and
+  `comment_scan_cases_test.go`. Copy the empty
+  `tests/testdata/comment_style/` baselines with them. It is one suite, with no
+  build tags. DB-backed tests skip on a fresh scaffold. They become required
+  once `create_tables.sql` exists, with `SKIP_DB=1` as the explicit opt-out.
+* Also copy
   `KIT/shared/scripts/pg_setup.sh` → `DEST/scripts/pg_setup.sh` (sourced by
   `setup_dev.sh`; keep its `SPDX` header, no `chmod` needed) and
   `KIT/go/scripts/rename_module.sh` → `DEST/scripts/rename_module.sh`

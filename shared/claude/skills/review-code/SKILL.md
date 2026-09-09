@@ -12,11 +12,11 @@ When reviewing code, start with the changes to be reviewed. If the user specifie
 
 
 ## Review by reading first; linting second; specific tests only to confirm a finding
-Do not open the review by running test suites and end to end tests. 
+Do not open the review by running test suites and end to end tests.
 
 1) Read the code first. Reading files outside the diff is always fine and is expected — the [cross-file] rules require it.
 2) Run fast linters and static checks as needed
-3) Once a finding exists, if you need to run a narrowly scoped command, that takes no more than a few seconds, then run it. If it disproves the finding, drop the finding rather than reporting it hedged. If confirming would take a broad or slow run, ask for permission to run the larger test. 
+3) Once a finding exists, if you need to run a narrowly scoped command, that takes no more than a few seconds, then run it. If it disproves the finding, drop the finding rather than reporting it hedged. If confirming would take a broad or slow run, ask for permission to run the larger test.
 
 
 ## What to look for
@@ -40,22 +40,26 @@ For each file in the diff, read the entire file's changes, then apply every rule
 
 ### General: Comments
 
-1. Is each comment proportional to the code it documents? Flag as too long: more than 5 comment lines on a single constant, variable, or struct field; more than 15 on a function or type; more than 20 at file or package level. Also flag any reviewed source file where total comment lines outnumber code lines. Quote the count and the declaration, and say which sentences to cut.
+1. Is each comment proportional to the code it documents? Flag as too long: more than 2 comment lines on a single constant, variable, or struct field; more than 10 on a function or type; more than 20 at file or package level. Quote the count and the declaration, and say which sentences to cut.
+1. Are there too many comments? Flag any reviewed source file where total comment lines exceed 75% of code lines. Quote the count and the declaration, and say which sentences to cut.
 1. If a single declaration needs a long explanation, that is a design smell rather than good documentation — the declaration is usually carrying too much. Flag it and recommend one of two fixes: simplify the design, or move the reasoning to a design doc and leave a one-line comment pointing at it.
-1. Does the comment state the decision instead of arguing for it? Flag persuasive or defensive prose: pre-empting objections nobody raised, rebutting alternatives nobody proposed, restating a point for emphasis, or rhetorical framing ("this is load-bearing, not a tuning constant"). One or two sentences of "why" is the budget.
-1. Are comments free of ALL-CAPS words used for emphasis? Flag each one. If a point needs shouting to land, the naming or the structure should be carrying it instead.
-1. Does the comment describe this code rather than other code? Flag narrative about unrelated implementations elsewhere ("not to be confused with X in path/y.go, which does the opposite"). A cross-reference is one line naming the file; more than that duplicates knowledge into two places that will disagree later.
+1. Does the comment state the decision instead of arguing for it? Flag persuasive or defensive prose: pre-empting objections nobody raised, rebutting absent alternatives, or restating a point for emphasis. One or two sentences of "why" is the budget.
+1. Are comments free of ALL-CAPS words used for emphasis? Flag each one.
+1. Does the comment describe other code or how callers invoke it? Flag narrative about unrelated implementations elsewhere ("not to be confused with X in path/y.go, which does the opposite").
 1. Is the comment free of restating what the code already says? Flag any comment that adds nothing beyond the name, signature, or single line that follows it.
-1. Does a comment justify keeping code that it also says cannot be reached? A comment explaining why dead-but-defensive code is retained is an argument for deleting the code. Flag the code, not just the comment.
-1. Are comments free of these banned words and phrases, any capitalization or inflection? `by design` · `genuine` · `real` · `win` · `grounded` · `honest` · `load-bearing` · `meaningfully` · `foot-gun`. They mark a comment insisting rather than informing; deleting the sentence is usually the fix, not a synonym. Exempt only when quoting a name the code doesn't control (`X-Real-IP`).
-1. Are the sentences short enough to read once? Target 10-15 words. Flag any sentence over 25 words. Flag any sentence with two or more em dashes or parentheticals. Flag any paragraph where commas outnumber periods. The fix is to break the clause chain into separate sentences. A parenthetical that carries content becomes its own sentence. Quote the offending sentence and give the split version. This rule covers markdown prose as much as code comments. Fenced code blocks and ASCII diagrams are exempt.
+1. Is the comment really necessary? Flag comments that describe a variable that is obvious. Consider renaming the variable if it is not obvious.
+1. Could a variable comment be moved to the end of the line? Flag comments that take extra lines unless they are absolutely necessary.
+1. Does the surrounding code have comments? Flag a comment that is out of place amongst its peers.
+1. Does a comment justify keeping code that cannot be reached? Flag the code, not just the comment.
+1. Are comments free of these banned words and phrases, any capitalization or inflection? `by design`, `foot-gun`, `genuine`, `grounded`, `honest`, `load-bearing`, `meaningfully`, `oracle`, `pins`, `real`, `venue`, `win`. Exempt only when quoting a proper name the code doesn't control (`X-Real-IP`, the Oracle database).
+1. Are the sentences short enough to read? Target 10-15 words. Flag any sentence over 25 words. Flag any sentence with two or more em dashes or parentheticals. Flag any paragraph where commas outnumber periods. The fix is to break the clause chain into separate sentences. A parenthetical that carries content becomes its own sentence. Quote the offending sentence and give the split version. This rule covers markdown prose as much as code comments. Fenced code blocks and ASCII diagrams are exempt.
 
 ### General: Correctness
 
 1. Is the code free of performance-sensitive issues? Does it avoid O(n) database transactions? Is the math efficient?
 1. Is the code free of required manual intervention, such as a database update?
 1. Do function callers correctly handle and report error conditions and/or sentinel return values?
-1. Does each independently-failable operation have its own idempotency guard (hint, flag, watermark)? When new code appends a second operation after the first operation's guard has already committed, a failure in the second operation is silently swallowed — the guard prevents any retry. Each operation that must complete reliably needs its own guard, even when logically related.
+1. Does each independently-failable operation have its own idempotency guard (hint, flag, watermark)? Each operation that must complete reliably needs its own guard, even when logically related.
 1. Do tests check both the happy path and any failure paths? Do tests check cached data in addition to a fall-through fetch case?
 1. Do tests avoid relying on special date values to protect against deleting test data? (Example: a test that sets dates to 2027 and cleans up all dates >= 2027 will fail once that year passes.)
 
@@ -99,5 +103,5 @@ Apply only when reviewing *.sh, *.py, *.pl files
 1. Number each complaint incrementally so that it can be addressed individually.
 1. Each complaint should have source code file, line number, a brief description of the problem, with a suggested fix.
 1. If a file has no violations, omit it from the report entirely
-1. Do not emit items that conclude "no issue", "this is fine", "safe", "acceptable". 
+1. Do not emit items that conclude "no issue", "this is fine", "safe", "acceptable".
 1. The report contains violations only, and this applies to the entire response — not just the numbered list. Never mention code you considered and decided not to flag: no "not flagged", "for the record", "worth noting", closing sections, asides, or explanations of why a rule did not fire. A dropped or disproven finding must not appear in the output in any form. If nothing violates any rule, the entire report is one line saying no violations were found.

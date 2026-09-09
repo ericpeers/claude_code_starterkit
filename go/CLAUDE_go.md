@@ -63,9 +63,9 @@ everywhere via the package logger (`log "github.com/sirupsen/logrus"`).
   startup banner and every later line share one format. Map `LOGLEVEL`
   (debug|info|warn|error from config) onto `log.SetLevel`; treat an unrecognized
   value as a fatal config error rather than silently defaulting.
-* **Route Gin's request logs through logrus** with `middleware.GinLogger()` (it
-  picks the level from the response status: 5xx→Error, 4xx→Warn, else Info), so
-  request lines obey the same `LOGLEVEL` filter. Build the router with
+* **Route Gin's request logs through logrus** with `middleware.GinLogger()`, so
+  request lines obey the same `LOGLEVEL` filter. It picks the level from the
+  response status: 5xx→Error, 4xx→Warn, else Info. Build the router with
   `gin.New()` + `gin.Recovery()`, never `gin.Default()` (which installs Gin's
   own stdout logger and produces a second, differently-formatted stream).
 * Log through the `log` package functions (`log.Infof`, `log.Errorf`), not
@@ -137,11 +137,11 @@ When a query could return millions of rows (bulk export):
 
 ## Testing
 
-* **One suite, run every time.** There are no build tags or a separate DB-only
-  test class: `go test ./tests/` (or `make test`) runs the file-based gates and
-  the DB-backed tests together, always. Don't reintroduce a split (`-tags itest`,
-  a `test_itest` target) — if a test needs the database, it skips itself when no
-  DB is configured rather than living behind a tag.
+* **One suite, run every time.** There are no build tags and no separate DB-only
+  test class. `go test ./tests/` (or `make test`) always runs the file-based
+  gates and the DB-backed tests together. Don't reintroduce a split (`-tags itest`,
+  a `test_itest` target). A test that needs the database skips itself when no DB
+  is configured, rather than living behind a tag.
 * Every feature gets a test in `tests/`, covering both error conditions and
   correctness.
 * DB-backed tests run against an **isolated ephemeral database** created and
@@ -169,15 +169,53 @@ SKIP_DB=1 go test ./tests/ -timeout 120s    # file-based gates only (no Postgres
 anything. Once `create_tables.sql` exists, a reachable `PG_URL` is mandatory
 unless you pass `SKIP_DB=1`.
 
+### Comment-style gates
+
+`tests/comment_style_test.go` holds three gates over comments and Markdown prose:
+`TestNoBannedCommentWords`, `TestNoAbsoluteClaims`, and `TestCommentSentenceLength`.
+They enforce the mechanical parts of *Comment style* in `CONVENTIONS.md`.
+`tests/comment_scan_test.go` extracts the prose from Go, SQL, Python, and
+Markdown. It leaves out code, string literals, fenced blocks, license headers,
+and the swag annotations that build `swagger.json`.
+
+The gates walk the tree rooted at the enclosing `go.mod`. In a scaffolded
+project that is the project root, so they cover everything. In a repository
+where the Go module sits in a subdirectory, they cover that subdirectory only,
+and `TestProseScanCoversTrackedFiles` checks the same narrower set.
+
+Each gate compares per-file hit counts against a baseline under
+`tests/testdata/comment_style/`. A fresh scaffold ships those empty, so the gates
+start enforcing on the first file you add. On an existing codebase, record what
+is already there once and ratchet it down. A recorded count is a rule break the
+gate lets pass, so record one only with a plan to remove it; `todo.md` tracks
+that. The comparison is exact in both directions. A new hit fails the gate. A
+cleaned-up hit fails it too, until the baseline drops to match. So rewrite the
+prose first, then record the lower counts:
+
+```bash
+COMMENT_STYLE_BASELINE=write go test ./tests/ -run 'TestNoBannedCommentWords|TestNoAbsoluteClaims|TestCommentSentenceLength'
+```
+
+`COMMENT_STYLE_REPORT=1` with `-v` lists every hit, baselined or not, and drops
+the per-file cap on the failure message. Raising a baseline count to land new
+prose defeats the gate; rewrite the prose instead.
+
+Two lists in `comment_style_test.go` are yours to extend: `styleExemptPhrases`,
+for domain vocabulary that carries a banned word innocently, and
+`bannedCommentWords` itself. `TestProseScanCoversTrackedFiles` checks the walk
+reaches every tracked file, so a pruned directory does not quietly shrink a
+baseline. `comment_scan_cases_test.go` covers the scanners, the block splitter,
+and the baseline comparison itself.
+
 ### License-header gate
 
-`tests/copyright_test.go` exempts files carrying `SPDX-License-Identifier:` (the
-kit's own boilerplate) and requires your `.go` files to have a
-`Copyright (c) <year> <holder>` header, where the holder is read from the
+`tests/copyright_test.go` exempts files carrying `SPDX-License-Identifier:`,
+which is the kit's own boilerplate. It requires your `.go` files to have a
+`Copyright (c) <year> <holder>` header. The holder is read from the
 committed `.copyright-holder` file (`setup_dev.sh` writes it). A fresh scaffold is
 green; the gate bites once you add your own un-headered code.
 
 ## Environment
 
 Load all configuration through `config/`. Document every variable in
-`.env_sample` (names only, never real values). `.env` is gitignored.
+`.env_sample` — names only, no values. `.env` is gitignored.

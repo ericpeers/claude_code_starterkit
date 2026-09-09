@@ -6,7 +6,7 @@ package tests
 //
 // Two kinds of files coexist in a project built from this kit:
 //   * Kit-supplied boilerplate — declares `SPDX-License-Identifier: MIT` and is
-//     EXEMPT here. It carries no personal copyright holder by design.
+//     exempt here. It carries no personal copyright holder.
 //   * Your own source — must carry a current-year copyright header naming the
 //     project's configured holder (see the .copyright-holder file, written by
 //     setup_dev.sh). This is how you enforce your ownership on the code you write.
@@ -98,10 +98,8 @@ func TestLicenseHeaders(t *testing.T) {
 			needHeader = append(needHeader, rel)
 			return nil
 		}
-		// Year-currency: require the current year only when the file was last
-		// committed this year, or when its commit year is unknown — uncommitted,
-		// brand-new, or git unavailable (gitLastCommitYear returns 0). New files
-		// must be current; a dormant prior-year file keeps its existing header.
+		// Year-currency: a dormant prior-year file keeps its existing header. A file
+		// touched this year, or still uncommitted, must carry the current one.
 		lastYear := gitLastCommitYear(root, rel)
 		if (lastYear == 0 || lastYear == currentYear) && !strings.Contains(head, currentYearStr) {
 			needYear = append(needYear, rel)
@@ -130,10 +128,8 @@ func TestLicenseHeaders(t *testing.T) {
 	}
 }
 
-// gitLastCommitYear returns the year of the most recent commit that touched
-// relPath (relative to root), or 0 if git is unavailable or the file has never
-// been committed. Callers treat 0 as the current year, so new/uncommitted files
-// must carry the current year.
+// gitLastCommitYear returns the year relPath was last committed, or 0 when git
+// is unavailable or the file is uncommitted. Callers read 0 as this year.
 func gitLastCommitYear(root, relPath string) int {
 	cmd := exec.Command("git", "log", "--follow", "-1", "--format=%ad", "--date=format:%Y", "--", relPath)
 	cmd.Dir = root

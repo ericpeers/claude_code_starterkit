@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ErrUserNotFound is returned when a lookup matches no row. The auth service
-// maps it to ErrInvalidCredentials on login so the API never reveals whether an
+// ErrUserNotFound is returned when a lookup matches no row. Login maps it to
+// ErrInvalidCredentials, so the API returns the same error whether or not the
 // email exists.
 var ErrUserNotFound = errors.New("user not found")
 
@@ -27,9 +27,10 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
-// GetByEmail returns the UserDTO and the stored password hash for the given email.
-// COALESCE keeps the scan total when passwd is NULL (a seeded admin before its
-// password has been set), which the service treats as a failed credential check.
+// GetByEmail returns the UserDTO and stored password hash for one email.
+// COALESCE keeps the scan total when passwd is NULL, which happens for a seeded
+// admin before its password is set. The service treats that as a failed
+// credential check.
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.UserDTO, string, error) {
 	var u models.UserDTO
 	var hash string
@@ -47,7 +48,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 	return &u, hash, nil
 }
 
-// GetByID returns the UserDTO for the given user ID (never the password hash).
+// GetByID returns the UserDTO for one user ID, without the password hash.
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*models.UserDTO, error) {
 	var u models.UserDTO
 	err := r.pool.QueryRow(ctx, `

@@ -26,10 +26,11 @@ From your scaffolded project root (the one with `go.mod`):
 ../claude_code_starterkit/go/optional/auth/install.sh .
 ```
 
-`install.sh` copies the Go files into `internal/…` (rewriting the import prefix to
-your module path), drops `bin/*` and `scripts/setup_admin.sh` in place, appends the
-auth vars to `.env_sample`, installs `create_tables.sql` (or tells you to merge if
-you already have one), and runs `go mod tidy`. It is idempotent.
+`install.sh` copies the Go files into `internal/…`, rewriting the import prefix
+to your module path. It drops `bin/*` and `scripts/setup_admin.sh` in place, and
+appends the auth vars to `.env_sample`. It installs `create_tables.sql`, or tells
+you to merge when you already have one. It then runs `go mod tidy`. It is
+idempotent.
 
 ## Two manual wiring edits
 

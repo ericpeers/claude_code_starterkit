@@ -9,11 +9,11 @@ package tests
 //   - Query / body / form params  -> snake_case
 //   - Path template params ({user_id}) -> snake_case (they bind to identifiers)
 //
-// Rationale: hyphens are the convention for URLs (case-insensitive, hyphen-safe
-// in DNS and readable), while payload keys are accessed as code identifiers where
-// hyphens are illegal, so they follow the snake_case used by DB columns and Go
-// json tags. Locking this into a test keeps the surface consistent as new
-// endpoints land.
+// Rationale: hyphens are the convention for URLs, which are case-insensitive,
+// hyphen-safe in DNS, and readable. Payload keys are reached as code
+// identifiers, where a hyphen is illegal. So they follow the snake_case used by
+// DB columns and Go json tags. A test holds the surface steady as new endpoints
+// land.
 //
 // File-based gate: skips gracefully when docs/swagger.json is absent, so a fresh
 // scaffold stays green until you generate Swagger docs (e.g. via `swag init`).
@@ -171,11 +171,8 @@ func TestSwaggerJSONFieldsAreSnakeCase(t *testing.T) {
 	}
 }
 
-// TestSwaggerParamsAreSnakeCase asserts query, body, and form parameter names use
-// snake_case. The generic "body"/"request" wrapper names that swag emits for
-// whole-struct request bodies are exempt — they are not part of the wire
-// contract, only the doc's internal parameter label. Add your own whole-struct
-// body wrapper names to bodyWrappers as needed.
+// TestSwaggerParamsAreSnakeCase asserts query, body, and form parameter names
+// use snake_case. The wrapper names in bodyWrappers are exempt.
 func TestSwaggerParamsAreSnakeCase(t *testing.T) {
 	t.Parallel()
 	doc, ok := loadSwaggerDoc(t)

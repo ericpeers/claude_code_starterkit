@@ -69,8 +69,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Failure 500 {object} models.ErrorResponse
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
-	// Mounted behind RequireAuth, so an authenticated user is guaranteed present. Using
-	// MustGetUserID fails closed rather than querying user 0 if auth were ever absent.
+	// Mounted behind RequireAuth, which puts the authenticated user in place.
+	// MustGetUserID fails closed rather than querying user 0 when auth is absent.
 	userID := middleware.MustGetUserID(c)
 	user, err := h.authSvc.GetUserByID(c.Request.Context(), userID)
 	if err != nil {

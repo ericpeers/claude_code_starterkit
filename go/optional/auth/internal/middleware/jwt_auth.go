@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-// Package middleware holds request-scoped Gin middleware. jwt_auth.go is the
-// auth half of the package: it parses a Bearer JWT, exposes the authenticated
-// user to handlers via the Gin context, and provides the RequireAuth /
-// RequireAdmin gates. It lives alongside the kit's gin_logger.go so both are
-// wired the same way in main.go.
+// Package middleware holds request-scoped Gin middleware. jwt_auth.go parses a
+// Bearer JWT and provides the RequireAuth and RequireAdmin gates.
 package middleware
 
 import (
@@ -94,10 +91,10 @@ func RequireAdmin() gin.HandlerFunc {
 	}
 }
 
-// GetUserID retrieves the authenticated user's ID from the Gin context. The bool reports
-// whether an authenticated user is present, and is load-bearing for OPTIONAL-auth handlers —
-// those mounted behind permissive ValidateUser but NOT RequireAuth, where an anonymous request
-// legitimately has no user id. Required-auth handlers should call MustGetUserID instead.
+// GetUserID retrieves the authenticated user's ID from the Gin context. The bool
+// reports whether an authenticated user is present. Handlers mounted behind
+// ValidateUser rather than RequireAuth need it, since an anonymous request
+// carries no user id.
 func GetUserID(c *gin.Context) (int64, bool) {
 	v, exists := c.Get(UserIDKey)
 	if !exists {
@@ -107,16 +104,10 @@ func GetUserID(c *gin.Context) (int64, bool) {
 	return id, ok
 }
 
-// MustGetUserID returns the authenticated user's ID and MUST only be called from handlers
-// mounted behind RequireAuth, which guarantees UserIDKey is present (ValidateUser only ever
-// stores it as an int64). It panics if the id is absent — a fail-CLOSED programming-error
-// signal that becomes a 500 via Gin's recovery, never a silent user-0 fallback (which would
-// authorize an unauthenticated request as user 0).
-//
-// INVARIANT: this is safe ONLY because RequireAuth runs first on every route that uses it. If
-// RequireAuth is removed from such a route, or auth extraction moves to a different layer, this
-// will panic instead of authorizing — re-audit callers and keep RequireAuth in the chain. See
-// RequireAuth, which is the enforcing half of this contract.
+// MustGetUserID returns the authenticated user's ID, and panics when it is
+// absent. Call it only from routes where RequireAuth runs first. The panic
+// becomes a 500 through Gin's recovery, rather than authorizing the request as
+// user 0.
 func MustGetUserID(c *gin.Context) int64 {
 	id, ok := GetUserID(c)
 	if !ok {
