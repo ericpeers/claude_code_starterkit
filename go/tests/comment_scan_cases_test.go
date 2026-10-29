@@ -6,7 +6,10 @@ package tests
 // scanner that returned nothing would make every guard pass on any input.
 
 import (
-	"os/exec"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -97,10 +100,11 @@ func TestProseScannersReadOnlyComments(t *testing.T) {
 	for _, tc := range proseScanCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := scanProse(tc.file, []byte(tc.src))
+			scanned, err := scanSource(tc.file, tc.file, []byte(tc.src))
 			if err != nil {
 				t.Fatalf("scanning %s: %v", tc.file, err)
 			}
+			got := scanned.prose
 			if len(got) != len(tc.want) {
 				t.Fatalf("got %d line(s), want %d: %+v", len(got), len(tc.want), got)
 			}
@@ -113,12 +117,12 @@ func TestProseScannersReadOnlyComments(t *testing.T) {
 	}
 }
 
-// TestScanProseReportsUnparsedGo checks that broken Go source returns an error
+// TestScanSourceReportsUnparsedGo checks that broken Go source returns an error
 // rather than stopping the walk. One such file must not disable every gate.
-func TestScanProseReportsUnparsedGo(t *testing.T) {
+func TestScanSourceReportsUnparsedGo(t *testing.T) {
 	t.Parallel()
 
-	if _, err := scanProse("broken.go", []byte("package sample\nfunc (\n")); err == nil {
+	if _, err := scanSource("broken.go", "broken.go", []byte("package sample\nfunc (\n")); err == nil {
 		t.Fatal("got no error for source that does not parse, want one")
 	}
 }
@@ -209,10 +213,11 @@ func TestProseBlocksSplitNonProse(t *testing.T) {
 	for _, tc := range proseBlockCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			prose, err := scanProse(tc.file, []byte(tc.src))
+			scanned, err := scanSource(tc.file, tc.file, []byte(tc.src))
 			if err != nil {
 				t.Fatalf("scanning %s: %v", tc.file, err)
 			}
+			prose := scanned.prose
 			file := proseFile{
 				rel:   tc.file,
 				path:  tc.file,
@@ -418,34 +423,74 @@ func TestInstructionDocsAreSkipped(t *testing.T) {
 	}
 }
 
+// missedTrackedFiles returns the tracked files in scope that the walk did not
+// scan. A file deleted or renamed in the working tree is not there to walk.
+func missedTrackedFiles(root string, tracked []string, scanned map[string]bool) ([]string, error) {
+	var missing []string
+	for _, rel := range tracked {
+		if !inScope(rel) || scanned[rel] {
+			continue
+		}
+		_, statErr := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))
+		if errors.Is(statErr, fs.ErrNotExist) {
+			continue
+		}
+		if statErr != nil {
+			return nil, statErr
+		}
+		missing = append(missing, rel)
+	}
+	return missing, nil
+}
+
 // TestProseScanCoversTrackedFiles checks the walk reaches every tracked file in
 // scope, under the Go module the gates run in. A walk that stopped early would
 // quietly shrink the next baseline.
 func TestProseScanCoversTrackedFiles(t *testing.T) {
 	t.Parallel()
 	root := getRepoRoot(t)
-
-	out, err := exec.Command("git", "-C", root, "ls-files", "-z").Output()
+	tracked := trackedFiles(t, root)
+	missing, err := missedTrackedFiles(root, tracked, scannedSet(loadProseFiles(t, root)))
 	if err != nil {
-		t.Skipf("git ls-files is unavailable: %v", err)
-	}
-
-	scanned := map[string]bool{}
-	for _, file := range loadProseFiles(t, root) {
-		scanned[file.rel] = true
-	}
-
-	var missing []string
-	for rel := range strings.SplitSeq(strings.TrimRight(string(out), "\x00"), "\x00") {
-		if rel == "" || !inScope(rel) {
-			continue
-		}
-		if !scanned[rel] {
-			missing = append(missing, rel)
-		}
+		t.Fatal(err)
 	}
 	if len(missing) > 0 {
 		t.Errorf("the walk missed %d tracked file(s) that inScope accepts:\n  %s",
 			len(missing), strings.Join(missing, "\n  "))
+	}
+}
+
+// TestMissedTrackedFilesSkipsDeletedFiles fails when the coverage check reports
+// a deleted file, passes an unscanned one, or hides a stat failure.
+func TestMissedTrackedFilesSkipsDeletedFiles(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	for _, rel := range []string{"scanned.go", "unscanned.go", "locked/hidden.go"} {
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("package p\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scanned := map[string]bool{"scanned.go": true}
+
+	missing, err := missedTrackedFiles(root, []string{"scanned.go", "unscanned.go", "deleted.go"}, scanned)
+	if err != nil || len(missing) != 1 || missing[0] != "unscanned.go" {
+		t.Errorf("missedTrackedFiles = %q, %v; want [unscanned.go] and no error", missing, err)
+	}
+
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a directory whatever its mode, so the stat failure cannot be staged")
+	}
+	locked := filepath.Join(root, "locked")
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup takes a func value. TempDir's removal needs the directory readable again.
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	if _, err := missedTrackedFiles(root, []string{"locked/hidden.go"}, scanned); err == nil {
+		t.Error("missedTrackedFiles hid a stat failure, want an error")
 	}
 }

@@ -10,14 +10,14 @@ needs_run() {
   stamp="$1"
   [ ! -f "$stamp" ] && return 0
 
-  src_changed=$(find src e2e \
+  src_changed=$(find src tests e2e \
     \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) \
     -newer "$stamp" 2>/dev/null | head -1)
 
   cfg_changed=$(find . -maxdepth 1 \
-    \( -name 'package.json' -o -name 'tsconfig*.json' \
+    \( -name 'package.json' -o -name 'package-lock.json' -o -name 'tsconfig*.json' \
        -o -name 'vite.config.*' -o -name 'playwright.config.*' \
-       -o -name 'jest.config.*' -o -name 'eslint.config.*' \) \
+       -o -name 'jest.config.*' -o -name 'eslint.config.*' -o -name 'knip.json' \) \
     -newer "$stamp" 2>/dev/null | head -1)
 
   [ -n "$src_changed" ] || [ -n "$cfg_changed" ]

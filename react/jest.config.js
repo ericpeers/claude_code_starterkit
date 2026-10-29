@@ -3,6 +3,8 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'jsdom',
+  // Clears git's hook variables before any test runs. CLAUDE.md gives the reason.
+  globalSetup: '<rootDir>/tests/helpers/gitGuard.ts',
   setupFiles: ['<rootDir>/src/setupGlobals.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   moduleNameMapper: {

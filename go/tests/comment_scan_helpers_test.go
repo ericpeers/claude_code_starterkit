@@ -8,6 +8,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -25,12 +26,15 @@ type proseLine struct {
 	text string
 }
 
-// proseFile is one scanned file, read once and shared by every guard.
+// proseFile is one scanned file, read once and shared by every guard. A Go
+// file also keeps its parse, so loadGoFiles does not parse it again.
 type proseFile struct {
-	rel   string
-	path  string
-	lines []string
-	prose []proseLine
+	rel    string
+	path   string
+	lines  []string
+	prose  []proseLine
+	fset   *token.FileSet
+	syntax *ast.File
 }
 
 // proseScan is one walk of the tree: the files read, and the ones whose Go
@@ -47,10 +51,11 @@ var (
 )
 
 // loadProseFiles returns the scanned tree, walking and parsing it on the first
-// call. The four gates run in parallel and share that one pass.
+// call. Every gate runs in parallel and shares that one pass.
 func loadProseFiles(t *testing.T, root string) []proseFile {
 	t.Helper()
 
+	// Once.Do takes no arguments, so the closure carries root.
 	proseOnce.Do(func() { proseTree, proseErr = readProseFiles(root) })
 	if proseErr != nil {
 		t.Fatalf("scanning the source tree: %v", proseErr)
@@ -61,8 +66,8 @@ func loadProseFiles(t *testing.T, root string) []proseFile {
 	return proseTree.files
 }
 
-// scanSkipDirs are trees the gates do not read: vendored code, build output,
-// virtualenvs, and the untracked scratch directory.
+// scanSkipDirs are trees the gates do not read. They hold vendored code, build
+// output, virtualenvs, and scratch notes.
 var scanSkipDirs = map[string]bool{
 	".git": true, "vendor": true, "node_modules": true, "build": true,
 	"dist": true, "venv": true, ".venv": true, "__pycache__": true,
@@ -95,34 +100,48 @@ func inScope(rel string) bool {
 // and moves on, so one bad file leaves the other gates running.
 var errUnparsed = errors.New("source does not parse")
 
-// collectProseFile reads and scans one file, wrapping a parse failure in
-// errUnparsed so the walk can tell it from an unreadable tree.
+// collectProseFile reads and scans one file. A parse failure is wrapped in
+// errUnparsed, so the walk can tell it from an unreadable tree.
 func collectProseFile(path, rel string) (proseFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return proseFile{}, err
 	}
-	prose, scanErr := scanProse(path, data)
+	file, scanErr := scanSource(rel, path, data)
 	if scanErr != nil {
 		return proseFile{}, fmt.Errorf("%w: %v", errUnparsed, scanErr)
 	}
-	return proseFile{
-		rel:   rel,
-		path:  path,
-		lines: strings.Split(string(data), "\n"),
-		prose: prose,
-	}, nil
+	return file, nil
 }
 
-// readProseFiles walks the tree rooted at root and scans every file in scope.
-// root is the Go module the gates run in, which is the whole repository only
-// when go.mod sits at its top.
-func readProseFiles(root string) (proseScan, error) {
-	var scan proseScan
+// scanSource scans one file's source with the scanner for its extension. It
+// reports an error only when Go source does not parse.
+func scanSource(rel, path string, data []byte) (proseFile, error) {
+	file := proseFile{rel: rel, path: path, lines: strings.Split(string(data), "\n")}
+	switch filepath.Ext(path) {
+	case ".go":
+		file.fset = token.NewFileSet()
+		syntax, err := parser.ParseFile(file.fset, path, data, parser.ParseComments)
+		if err != nil {
+			return proseFile{}, fmt.Errorf("parsing %s: %w", path, err)
+		}
+		file.syntax = syntax
+		file.prose = scanGoProse(file.fset, file.syntax)
+	case ".md":
+		file.prose = scanMarkdownProse(string(data))
+	case ".sql":
+		file.prose = scanSQLProse(string(data))
+	case ".py":
+		file.prose = scanPythonProse(string(data))
+	}
+	return file, nil
+}
 
-	// A closure rather than a named function: WalkDir takes a func value, and the
-	// body appends to scan, which no single call can return.
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+// walkScanTree calls visit on each file under root, outside scanSkipDirs. rel
+// is repo-relative, in slash form.
+func walkScanTree(root string, visit func(path, rel string) error) error {
+	// WalkDir takes a func value, and this one forwards to visit.
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -132,7 +151,18 @@ func readProseFiles(root string) (proseScan, error) {
 			}
 			return nil
 		}
-		rel := filepath.ToSlash(relFromRoot(root, path))
+		return visit(path, filepath.ToSlash(relFromRoot(root, path)))
+	})
+}
+
+// readProseFiles walks the tree rooted at root and scans every file in scope.
+// root is the Go module the gates run in, which is the whole repository only
+// when go.mod sits at its top.
+func readProseFiles(root string) (proseScan, error) {
+	var scan proseScan
+
+	// The closure appends to scan, which walkScanTree has no way to return.
+	err := walkScanTree(root, func(path, rel string) error {
 		if !inScope(rel) {
 			return nil
 		}
@@ -162,38 +192,22 @@ func relFromRoot(root, path string) string {
 	return rel
 }
 
-// scanProse dispatches to the scanner for a file's extension. It reports an
-// error only when Go source does not parse.
-func scanProse(path string, data []byte) ([]proseLine, error) {
-	switch filepath.Ext(path) {
-	case ".go":
-		return scanGoProse(path, data)
-	case ".md":
-		return scanMarkdownProse(string(data)), nil
-	case ".sql":
-		return scanSQLProse(string(data)), nil
-	case ".py":
-		return scanPythonProse(string(data)), nil
-	}
-	return nil, nil
-}
-
 // goDirective matches the comment forms a tool reads rather than a person: build
 // and generate directives, and the swag annotations that become swagger.json.
 var goDirective = regexp.MustCompile(`^//(go:|\s*[@+]|line )`)
 
-// scanGoProse returns the comment lines of a Go file. The header on line 1 is a
-// license notice, so it is left out along with tool directives.
-func scanGoProse(path string, data []byte) ([]proseLine, error) {
-	fset := token.NewFileSet()
-	parsed, err := parser.ParseFile(fset, path, data, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
-	}
+// isLicenseHeader reports whether a comment group is the license notice: it
+// opens on line 1, above the package clause.
+func isLicenseHeader(fset *token.FileSet, file *ast.File, group *ast.CommentGroup) bool {
+	return fset.Position(group.Pos()).Line == 1 && group.Pos() < file.Package
+}
 
+// scanGoProse returns the comment lines of a parsed Go file. The license header
+// and tool directives are left out.
+func scanGoProse(fset *token.FileSet, parsed *ast.File) []proseLine {
 	var out []proseLine
 	for _, group := range parsed.Comments {
-		if fset.Position(group.Pos()).Line == 1 {
+		if isLicenseHeader(fset, parsed, group) {
 			continue
 		}
 		for _, comment := range group.List {
@@ -206,7 +220,7 @@ func scanGoProse(path string, data []byte) ([]proseLine, error) {
 			}
 		}
 	}
-	return out, nil
+	return out
 }
 
 // markdownInlineCode matches a backtick span, which holds identifiers and
@@ -277,8 +291,8 @@ func scanSQLProse(data string) []proseLine {
 // pythonTripleQuotes are the two docstring delimiters.
 var pythonTripleQuotes = []string{`"""`, `'''`}
 
-// pythonOpen is a triple-quoted string a line leaves unterminated. prose is true
-// when it opened the line, which makes it a docstring rather than a literal.
+// pythonOpen is an unterminated triple-quoted string at the end of a line. prose
+// is true when the string opened the line, which makes it a docstring.
 type pythonOpen struct {
 	delim string
 	prose bool

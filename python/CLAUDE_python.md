@@ -52,6 +52,37 @@ Loosen or tighten per project; basic is a pragmatic default.
 Edit `SCAN_PATHS` in the test to point at your production packages (exclude
 `tests/`). Both tools skip if not installed, so a bare environment still runs.
 
+## Dependency vulnerability gate
+
+`tests/test_vuln_audit.py` runs pip-audit over the venv. It fails when:
+
+* an advisory has a released fix and the package is not upgraded,
+* an advisory has no fix and is missing from `tests/vuln_allowlist.json`, or
+* an allowlisted advisory gets a fix.
+
+Run `python scripts/fix_vulns.py` to clear a failure. It upgrades each fixable
+package and raises its `>=` floor in `requirements.txt` if one is listed. Then
+it asks whether to allowlist each unfixed advisory, with a reason. An entry
+matches the advisory id or any alias (CVE, GHSA).
+
+The scan needs network access to PyPI. Offline, deselect it with
+`-k "not no_known_vulnerabilities"`. It can fail on the day an advisory ships.
+
+## Read-only git in tests
+
+Tests run only `git ls-files`, `log`, and `check-ignore`, even in a temp dir.
+The pre-commit hook runs the suite, and git exports `GIT_DIR` and similar
+variables to that hook. A git write from a test then lands in the repo being
+committed. When code under test calls git, stub it.
+
+* `tests/test_git_guard.py` parses every file under `tests/`. It fails on any
+  other subcommand or a `-c` option. It also fails on a non-literal subcommand,
+  an f-string shell command that names git, or a git library import. It scans
+  test files, not the code they call.
+* `tests/conftest.py` deletes every `GIT_*` variable when the run starts. It
+  sets `GIT_CEILING_DIRECTORIES` to the temp dir, so git in a temp dir finds
+  no repo above it.
+
 ## Testing
 
 * Every feature gets a test in `tests/`, covering error conditions and

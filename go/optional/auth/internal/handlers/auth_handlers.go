@@ -37,7 +37,8 @@ func NewAuthHandler(authSvc *services.AuthService) *AuthHandler {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "bad_request", Message: err.Error()})
+		log.Warnf("Login: bad request body: %v", err)
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "bad_request", Message: "request body must be JSON with an email and a password"})
 		return
 	}
 

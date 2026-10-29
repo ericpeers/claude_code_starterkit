@@ -1,0 +1,4 @@
+{
+  "_doc": "govulncheck findings with no upstream fix. Each entry needs an 'id' (GO-YYYY-NNNN) and a 'reason'. 'make fix_vulns' upgrades every finding that has a fix and offers to add the rest here. TestGovulncheck fails once a reachable entry here gets a fix.",
+  "allowlist": []
+}

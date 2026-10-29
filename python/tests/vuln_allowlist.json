@@ -1,0 +1,4 @@
+{
+  "_doc": "pip-audit findings with no released fix. Each entry needs an 'id' (PYSEC-, GHSA- or CVE-) and a 'reason'. tests/test_vuln_audit.py fails once a listed advisory gets a fix. Managed by scripts/fix_vulns.py.",
+  "allowlist": []
+}

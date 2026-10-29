@@ -12,6 +12,12 @@
     ],
     "ask": [
       "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Edit(**/todo.md)",
+      "Write(**/todo.md)",
+      "Edit(**/tests/testdata/guards.txt)",
+      "Write(**/tests/testdata/guards.txt)"
     ]
   },
   "model": "opus",

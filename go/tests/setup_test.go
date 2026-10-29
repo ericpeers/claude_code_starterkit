@@ -2,27 +2,9 @@
 
 package tests
 
-// Ephemeral test-database lifecycle with a production-data safety guard.
-//
-// One suite, one command. `go test ./tests/` runs everything every time: the
-// file-based gates and these DB-backed tests. There are no build tags.
-//
-// The database is required as soon as the project has a schema. A dropped
-// PG_URL then fails loudly rather than skipping the DB suite in silence.
-// runTests holds the exact rule. A fresh scaffold has no create_tables.sql yet,
-// so it still passes with no database. SKIP_DB=1 is the opt-out for a
-// lint-only run.
-//
-// TestMain creates a throwaway database, dropping any orphan first. It applies
-// your schema and asserts the result does not look like production. It then runs
-// the suite and drops the database. Tests share the package-level testPool.
-//
-// Customize:
-//   - testDBName                  : name of the ephemeral database
-//   - productionRowThreshold      : row count above which the guard assumes
-//                                    production data
-//   - guardTable                  : a core table to count rows of in the guard
-//   - seed*()                     : add your own synthetic seed functions here
+// Ephemeral test-database lifecycle with a production-data safety guard. The
+// rules for when the database is required are in CLAUDE.md under Testing.
+// Customize testDBName, productionRowThreshold, guardTable, and the seed calls.
 
 import (
 	"context"
@@ -36,6 +18,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
+
+// schemaFile is the DDL file, repo-relative. Its presence makes the database required unless SKIP_DB=1.
+const schemaFile = "create_tables.sql"
 
 const (
 	testDBName             = "app_test"
@@ -58,20 +43,9 @@ func runTests(m *testing.M) int {
 	// nothing exported by hand. A shell variable already set takes precedence.
 	_ = godotenv.Load("../.env", ".env")
 
-	// Decide whether the database is required for this run. The rule keeps a
-	// fresh scaffold green, and stops a DB-backed project passing without
-	// touching the database:
-	//
-	//   - SKIP_DB=1                       -> explicit opt-out; skip DB setup (only
-	//                                        the file-based gates run). Use for a
-	//                                        lint-only check or a host with no Postgres.
-	//   - no create_tables.sql            -> fresh scaffold; there are no DB-backed
-	//                                        tests yet, so nothing is masked.
-	//   - create_tables.sql but no PG_URL -> the run fails. A schema means this is a DB-backed
-	//                                        project; a dropped/forgotten PG_URL must
-	//                                        not silently turn the DB suite into a no-op.
-	//
-	// Anything past this block requires a reachable database; connection failures fail.
+	// SKIP_DB=1 skips DB setup. So does a fresh scaffold with no schema yet.
+	// A schema without PG_URL fails, so a dropped PG_URL does not pass in silence.
+	// Past this switch the database must be reachable.
 	pgURL := os.Getenv("PG_URL")
 	_, schemaErr := os.Stat("../" + schemaFile)
 	schemaExists := schemaErr == nil

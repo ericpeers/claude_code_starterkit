@@ -38,6 +38,7 @@ SCAN_PATHS = [
     "src",
     "app",
     "config.py",
+    "scripts",
 ]
 
 

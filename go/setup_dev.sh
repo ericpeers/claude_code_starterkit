@@ -18,24 +18,17 @@ if ! have go; then
 fi
 go version
 
-# --- Phase 2: Go developer tools -----------------------------------------
-log "Installing Go developer tools"
-install_tool() { # name install-path
-  if [ ! -x "$(go env GOPATH)/bin/$1" ]; then
-    echo "  installing $1"
-    go install "$2"
-  else
-    echo "  $1 already present"
-  fi
-}
-install_tool staticcheck   honnef.co/go/tools/cmd/staticcheck@latest
-install_tool govulncheck   golang.org/x/vuln/cmd/govulncheck@latest
-install_tool deadcode      golang.org/x/tools/cmd/deadcode@latest
-# swag generates the Swagger/OpenAPI spec from handler annotations (make docs).
-install_tool swag          github.com/swaggo/swag/cmd/swag@latest
-# gosec and unparam are optional; uncomment if you want them:
-# install_tool gosec        github.com/securego/gosec/v2/cmd/gosec@latest
-# install_tool unparam      mvdan.cc/unparam@latest
+# --- Phase 2: helper commands ------------------------------------------------
+# The Go linters and scanners (staticcheck, govulncheck, gosec, deadcode, swag,
+# ...) are declared in go.mod's tool block and run through `go tool`, so
+# nothing is installed globally. Phase 6 builds them. jq is used by
+# scripts/fix_vulns.sh (make fix_vulns).
+log "Checking helper commands"
+if have jq; then
+  echo "  jq present"
+else
+  warn "jq not found; install it to use 'make fix_vulns'"
+fi
 
 # --- Phase 3: .env from template -----------------------------------------
 log "Setting up .env"
@@ -151,6 +144,7 @@ log "Wiring git hooks"
 if [ -d .git ]; then
   git config core.hooksPath .githooks
   [ -f .githooks/pre-commit ] && chmod +x .githooks/pre-commit
+  [ -f .githooks/commit-msg ] && chmod +x .githooks/commit-msg
   echo "  core.hooksPath -> .githooks"
 else
   warn "not a git repository; run 'git init' then re-run to wire hooks"
@@ -159,6 +153,11 @@ fi
 # --- Phase 6: dependencies + build ---------------------------------------
 log "Resolving modules"
 go mod tidy
+
+# Builds every tool in go.mod's tool block into the build cache, so the first
+# test run does not pay for it.
+log "Building Go developer tools"
+go build tool
 
 log "Building"
 go build ./... || warn "build failed — expected on an empty scaffold until you add main.go"

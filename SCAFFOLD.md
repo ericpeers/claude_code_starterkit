@@ -54,14 +54,17 @@ Let **DEST** = the current directory (the new, ideally empty, repo).
 4. **.claude/** — create `DEST/.claude/` and copy:
    * `KIT/shared/claude/settings.json` → `DEST/.claude/settings.json`
    * `KIT/shared/claude/skills/review-code/` → `DEST/.claude/skills/review-code/`
+   * `KIT/shared/claude/skills/design-doc/` → `DEST/.claude/skills/design-doc/`
 5. **Git hooks** — copy the stack's pre-commit:
    * react: `KIT/react/githooks/pre-commit` → `DEST/.githooks/pre-commit`
    * go / python / infra: `KIT/shared/githooks/pre-commit` →
      `DEST/.githooks/pre-commit`, and replace the `TEST_CMD="..."` line with the
      stack's test command (see per-stack table below).
-   Make it executable. (`setup_dev.sh` runs `git config core.hooksPath .githooks`.)
+   * every stack: `KIT/shared/githooks/commit-msg` → `DEST/.githooks/commit-msg`
+     (strips `Co-Authored-By:` trailers).
+   Make both executable. (`setup_dev.sh` runs `git config core.hooksPath .githooks`.)
 6. **.gitignore** — copy `KIT/shared/gitignore.base` → `DEST/.gitignore`.
-7. **Make scripts executable** — `chmod +x DEST/setup_dev.sh` and the pre-commit.
+7. **Make scripts executable** — `chmod +x DEST/setup_dev.sh` and both git hooks.
 8. **Report next steps** (see bottom).
 
 ## Per-stack details
@@ -83,18 +86,20 @@ exactly why step 1 collects the holder up front.
   logger) and `internal/swagger/swagger.go` (mounts the Swagger UI). Those two
   give the generated app a single logging path and Swagger out of the box. See
   CLAUDE_go.md "Default HTTP stack".
-* `tests/` holds `quality_test.go`, `copyright_test.go`,
-  `swagger_naming_test.go`, `setup_test.go`, `schema_test.go`, and the
-  comment-style gates `comment_style_test.go`, `comment_scan_test.go`, and
-  `comment_scan_cases_test.go`. Copy the empty
-  `tests/testdata/comment_style/` baselines with them. It is one suite, with no
-  build tags. DB-backed tests skip on a fresh scaffold. They become required
+* `tests/` holds the whole Go suite. It covers SQL and schema, license headers,
+  swagger naming, and comment style and length. It also runs static analysis,
+  `govulncheck`, hygiene, layering, and guarded regions. `vuln_allowlist.json`
+  lists the triaged vulns. Copy all of `tests/testdata/` with it, including the
+  empty `comment_style/` baselines and the header-only `guards.txt`. It is one
+  suite, with no build tags. DB-backed tests skip on a fresh scaffold. They become required
   once `create_tables.sql` exists, with `SKIP_DB=1` as the explicit opt-out.
 * Also copy
   `KIT/shared/scripts/pg_setup.sh` → `DEST/scripts/pg_setup.sh` (sourced by
   `setup_dev.sh`; keep its `SPDX` header, no `chmod` needed) and
   `KIT/go/scripts/rename_module.sh` → `DEST/scripts/rename_module.sh`
   (`chmod +x`; keep its `SPDX` header — it sets/renames the module path).
+* Also copy `KIT/go/scripts/fix_vulns.sh` (`chmod +x`), `vuln_upgrades.jq`, and
+  `vuln_remaining.jq` into `DEST/scripts/`. `make fix_vulns` runs them.
 * **Default HTTP stack — Gin + logrus + swaggo.** When you generate the app
   (`main.go`, handlers), wire logging and docs through the shipped building
   blocks rather than rolling your own: build the router with `gin.New()` +
@@ -176,26 +181,39 @@ exactly why step 1 collects the holder up front.
 ### python
 * Copy: `CLAUDE_python.md`, `setup_dev.sh`, `requirements.txt`,
   `pyrightconfig.json`, `pytest.ini`, `vulture_whitelist.py`, `.env_sample`,
-  `tests/` (`test_no_dead_code.py`, `test_copyright.py`).
+  `scripts/fix_vulns.py`, `tests/` (`conftest.py`, `test_no_dead_code.py`,
+  `test_copyright.py`, `test_git_guard.py`, `test_vuln_audit.py`,
+  `vuln_allowlist.json`).
 * pre-commit TEST_CMD: `.venv/bin/pytest -q`
-* Notes: edit `SCAN_PATHS` in `test_no_dead_code.py` to your package layout.
+* Notes: edit `SCAN_PATHS` in `test_no_dead_code.py` to your package layout; keep
+  `scripts`. The pip-audit gate needs network access to PyPI, so an offline
+  commit fails it.
 
 ### react
 * Copy: `CLAUDE_react.md`, `setup_dev.sh`, `package.json`, `eslint.config.js`,
   `jest.config.js`, `playwright.config.ts`, `vite.config.ts`, `knip.json`,
-  `tsconfig*.json`, `.env_sample`, `tests/` (`npmAudit.test.ts`,
-  `licenses.test.ts`, `copyright.test.ts`), and the minimal `src/` stubs
-  (`setupGlobals.ts`, `setupTests.ts`, `__mocks__/fileMock.cjs`).
+  `tsconfig*.json`, `.env_sample`, all of `tests/`, `e2e/git-guard.spec.ts`, and
+  the minimal `src/` stubs (`setupGlobals.ts`, `setupTests.ts`,
+  `__mocks__/fileMock.cjs`).
+* `tests/` holds the `bannedWords`, `deadCode`, `eslint`, `gitGuard`,
+  `npmAudit`, `npmAuditHelpers`, `licenses`, and `copyright` tests. It also holds
+  `tests/helpers/`, which jest's `globalSetup` needs.
+* Copy `KIT/shared/tests/gitGuard.ts` → `DEST/tests/helpers/gitGuard.ts`. The
+  copy in `KIT/react/tests/helpers/` matches it.
 * pre-commit: use `KIT/react/githooks/pre-commit` verbatim (stamp-file variant).
-* Notes: `npm test` runs the license, npm-audit, and copyright gates after
-  `npm install`.
+* Notes: `npm test` runs the license, npm-audit, copyright, ESLint, dead-code,
+  banned-word, and git-guard gates after `npm install`. The npm-audit gate needs
+  network access.
 
 ### infra
 * Copy: `CLAUDE_infra.md`, `setup_dev.sh`, `package.json`, `jest.config.js`,
   `tsconfig.json`, `cdk.json`, `.env_sample`, `scripts/lib.sh`, `tests/`
   (`lint_checks.test.ts`, `copyright_checks.test.ts`, `security_checks.test.ts`,
-  and `cdk_nag_suppressions.test.ts.template` — leave the `.template` extension
-  so it stays inactive until the user has a stack).
+  `git_guard.test.ts`, and `cdk_nag_suppressions.test.ts.template`).
+* Copy `KIT/shared/tests/gitGuard.ts` → `DEST/tests/helpers/gitGuard.ts`. It
+  holds jest's `globalSetup` and is required. Leave the
+  `.template` extension on the cdk-nag test so it stays inactive until the user
+  has a stack.
 * pre-commit TEST_CMD: `npm test`
 * Notes: the user adds `bin/app.ts` and `lib/`.
 

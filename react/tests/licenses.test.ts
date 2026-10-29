@@ -1,14 +1,14 @@
 /**
  * @jest-environment node
- * SPDX-License-Identifier: MIT
  */
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from '@jest/globals';
 import { init } from 'license-checker-rseidelsohn';
 import type { ModuleInfos } from 'license-checker-rseidelsohn';
+import { ROOT } from './helpers/repoFiles';
 
-// Permissive licenses safe to ship in a commercial product. Add to this set
-// only after confirming a license is genuinely compatible with your distribution
-// model — do not add copyleft licenses (GPL, AGPL, LGPL) without legal review.
+// Permissive licenses safe to ship in a commercial product. Copyleft licenses
+// (GPL, AGPL, LGPL) need legal review first.
 const ALLOWED_LICENSES = new Set([
   'MIT',
   'MIT-0',        // MIT without attribution requirement
@@ -42,7 +42,7 @@ function toTokens(licenses: string | string[] | undefined): string[] {
 function scanPackages(): Promise<ModuleInfos> {
   return new Promise((resolve, reject) => {
     init(
-      { start: process.cwd(), excludePrivatePackages: true },
+      { start: ROOT, excludePrivatePackages: true },
       (err: Error, packages: ModuleInfos) => (err ? reject(err) : resolve(packages)),
     );
   });

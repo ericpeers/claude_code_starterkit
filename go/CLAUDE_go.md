@@ -77,7 +77,8 @@ The OpenAPI surface is **generated from handler annotations** — one source of
 truth, never a hand-maintained spec.
 
 * Annotate `main()` (title/version/basepath/security) and each handler with
-  `swag` comments. Generate the spec with `make docs` (`swag init` → `./docs`).
+  `swag` comments. Generate the spec with `make docs` (`go tool swag init` →
+  `./docs`).
 * Blank-import the generated package in `main.go` so its `init()` registers the
   spec: `import _ "<your-module>/docs"`. Mount the UI with
   `swagger.Register(router)`, gated on `cfg.EnableSwagger` (`ENABLE_SWAGGER`) so
@@ -174,7 +175,17 @@ unless you pass `SKIP_DB=1`.
 `tests/comment_style_test.go` holds three gates over comments and Markdown prose:
 `TestNoBannedCommentWords`, `TestNoAbsoluteClaims`, and `TestCommentSentenceLength`.
 They enforce the mechanical parts of *Comment style* in `CONVENTIONS.md`.
-`tests/comment_scan_test.go` extracts the prose from Go, SQL, Python, and
+`tests/comment_length_test.go` adds four over Go source:
+
+* `TestCommentBlockLength`: a comment block runs at most 6 lines.
+* `TestFuncDocLength`: a function doc runs at most 4 prose lines, or 2 for a
+  one-line body. Indented list items do not count.
+* `TestSwaggerDescriptionLength`: a route's `@Description` is 1-3 sentences.
+* `TestFieldCommentPlacement`: a struct field's comment goes at the end of its
+  line when it fits in 120 columns. It also goes there when the other fields in
+  the struct use end-of-line comments.
+
+`tests/comment_scan_helpers_test.go` extracts the prose from Go, SQL, Python, and
 Markdown. It leaves out code, string literals, fenced blocks, license headers,
 and the swag annotations that build `swagger.json`.
 
@@ -193,19 +204,83 @@ cleaned-up hit fails it too, until the baseline drops to match. So rewrite the
 prose first, then record the lower counts:
 
 ```bash
-COMMENT_STYLE_BASELINE=write go test ./tests/ -run 'TestNoBannedCommentWords|TestNoAbsoluteClaims|TestCommentSentenceLength'
+COMMENT_STYLE_BASELINE=write go test ./tests/ -run 'TestNoBannedCommentWords|TestNoAbsoluteClaims|TestCommentSentenceLength|TestCommentBlockLength|TestFuncDocLength|TestSwaggerDescriptionLength|TestFieldCommentPlacement'
 ```
 
 `COMMENT_STYLE_REPORT=1` with `-v` lists every hit, baselined or not, and drops
 the per-file cap on the failure message. Raising a baseline count to land new
 prose defeats the gate; rewrite the prose instead.
 
-Two lists in `comment_style_test.go` are yours to extend: `styleExemptPhrases`,
+Two lists in `comment_style_helpers_test.go` are yours to extend: `styleExemptPhrases`,
 for domain vocabulary that carries a banned word innocently, and
 `bannedCommentWords` itself. `TestProseScanCoversTrackedFiles` checks the walk
 reaches every tracked file, so a pruned directory does not quietly shrink a
 baseline. `comment_scan_cases_test.go` covers the scanners, the block splitter,
 and the baseline comparison itself.
+
+### Static-analysis gates
+
+The linters are declared in the `tool` block of `go.mod` and run through
+`go tool <name>`, at the version `go.mod` names. Nothing is installed globally.
+`setup_dev.sh` builds them once with `go build tool`. Upgrade one with
+`go get -tool <pkg>@latest`, then `go mod tidy`.
+
+`tests/static_analysis_test.go` runs `staticcheck` (settings in
+`staticcheck.conf`), `go vet`, `gofmt -l`, `go mod tidy -diff`, `ineffassign`,
+`unparam -exported`, and `gosec`. Suppress a gosec finding with `#nosec` and a
+reason at the call site. It also holds four deeper gates:
+
+* `TestDeadcode`: no function is unreachable from `main`.
+* `TestInternalPackagesReachable`: `main` imports every package under `internal/`.
+* `TestNoUncalledExportedMethods`: every exported method has a use. deadcode
+  counts any method of a type stored in an interface as reachable.
+* `TestGovulncheck`: no reachable vulnerability has a fix waiting, and each one
+  without a fix is listed in `tests/vuln_allowlist.json`. `make fix_vulns` runs
+  `scripts/fix_vulns.sh`. It upgrades what it can and offers to allowlist the
+  rest with a reason. It needs `jq`.
+
+The first two skip until the module has a `main` package. `deadcodeAllowlist`
+keeps a function on purpose, with a reason. Packages under `optional/` stay out
+of the reachability gates until `install.sh` copies them into `internal/`.
+
+`TestGoVersionCurrent` fails when `go.mod` trails the newest Go series.
+`TestGoToolsCurrent` fails when a tool trails its latest release by two minors.
+Both live in `tests/tool_versions_test.go`. These two and `TestGovulncheck` need the network, and
+can fail on the day an upstream release ships.
+
+### Hygiene and layering gates
+
+* `TestNoHackFixmeMarkers`: a `HACK FIXME` comment marks debug code that must
+  not be committed. A bare `FIXME` is fine.
+* `TestMaxLineLength`: production Go lines stay within 250 columns, with a tab as 4. Put
+  `//no line_len check` on the line above one that resists wrapping.
+* `TestNoBlankVariableDiscard`: no `_ = x` on a plain variable in production
+  code. It only hides a dead variable.
+* `TestNoTestFilesOutsideTestsDir`: every `_test.go` file lives in `tests/`.
+* `TestSharedHelpersLiveInHelperFiles`: a test-package name used by a second
+  file is declared in `setup_test.go` or a `<topic>_helpers_test.go` file.
+* `TestTestsRunOnlyReadOnlyGit`: tests run only `git ls-files`, `log`, and
+  `check-ignore`. The pre-commit hook runs the suite, and a git write from
+  there lands in the repository being committed.
+* `TestGitignoreCoversDatabaseDumps` and `TestNoDatabaseDumpsTracked`: dump and
+  archive files are gitignored, and none is tracked. The patterns include
+  `*.dump`, `*.sql.gz`, `*.sqlite`, and `*.tar.gz`. Both skip outside a git work
+  tree.
+* `TestNegatedAssignmentGuardsSetPipefail`: a shell script that negates a
+  pipeline assignment, as in `if ! x="$(a | b)"`, sets `pipefail`. Without it
+  the guard sees only the status of `b`.
+* `TestGuardedRegions`: code between `// guard:begin <name>` and
+  `// guard:end <name>` matches its hash in `tests/testdata/guards.txt`.
+  Comments and whitespace do not count. Only the human edits the manifest.
+  `GUARD_HASH_REPORT=1` with `-v` prints the current hashes.
+* `TestNoPgxImportsAboveRepository`: `internal/services`, `handlers`, and
+  `models` do not import pgx. It skips until one of them exists.
+* `TestNoRawErrorTextInResponses`: no error text reaches a Gin reply. The scan
+  follows locals, parameters, and helper returns. Log the error and reply with
+  text written for the caller.
+
+Each detector has a fixture-based self-test beside it. A broken detector then
+fails its self-test instead of passing the tree.
 
 ### License-header gate
 

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT
 import { defineConfig, devices } from '@playwright/test';
+import gitGuardSetup from './tests/helpers/gitGuard';
+
+// Clears git's hook variables before the webServer starts. CLAUDE.md gives the reason.
+gitGuardSetup();
 
 // Base URL for the dev server Playwright drives. Override via env if needed.
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';

@@ -30,3 +30,24 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# Database dumps and bulk exports. They carry production data and can be many
+# GB. One `git add -A` puts them in history for good. The patterns match file
+# shape, not name: pg_dump formats, rotated or compressed copies, and archives.
+# The schema and migrations stay tracked, so bare *.sql is not ignored.
+*.dump
+*.dump.*
+*.dmp
+*.pgdump
+*.backup
+*.custom
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sql.zst
+*.tar.gz
+*.tgz
+*.zip

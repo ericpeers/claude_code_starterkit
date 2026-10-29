@@ -30,7 +30,7 @@ npx playwright install chromium || warn "playwright install failed; e2e tests wi
 log "Setting up .env"
 if [ ! -f .env ]; then
   cp .env_sample .env
-  echo "  created .env from .env_sample — fill in real values"
+  echo "  created .env from .env_sample — fill in your values"
 else
   echo "  .env already exists; leaving it untouched"
 fi
@@ -56,6 +56,7 @@ log "Wiring git hooks"
 if [ -d .git ]; then
   git config core.hooksPath .githooks
   [ -f .githooks/pre-commit ] && chmod +x .githooks/pre-commit
+  [ -f .githooks/commit-msg ] && chmod +x .githooks/commit-msg
   echo "  core.hooksPath -> .githooks"
 else
   warn "not a git repository; run 'git init' then re-run to wire hooks"

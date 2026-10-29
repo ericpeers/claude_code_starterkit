@@ -1,0 +1,3 @@
+# Guarded regions and their approved hashes. Only the human edits this file.
+# Each line: region name, repo-relative path, hash of the region's Go tokens.
+# GUARD_HASH_REPORT=1 go test ./tests/ -run TestGuardedRegions -v prints the current hashes.

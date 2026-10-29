@@ -4,7 +4,7 @@
 //
 // Two kinds of files coexist in a project built from this kit:
 //   * Kit-supplied boilerplate declares `SPDX-License-Identifier: MIT` and is
-//     EXEMPT here. It carries no personal copyright holder by design.
+//     exempt here. It carries no personal copyright holder.
 //   * Your own source must carry a current-year copyright header naming the
 //     project's configured holder (the .copyright-holder file written by
 //     setup_dev.sh). This is how you enforce your ownership on the code you write.
@@ -15,8 +15,7 @@ import { describe, it, expect } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-
-const ROOT = process.cwd();
+import { ROOT } from './helpers/repoFiles';
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR = CURRENT_YEAR.toString();
 const SPDX_RE = /SPDX-License-Identifier:\s*\S+/;

@@ -9,12 +9,12 @@
   ],
   "project": [
     "src/**/*.{ts,tsx}",
+    "tests/**/*.{ts,tsx}",
     "scripts/**/*.{js,mjs,ts}"
   ],
   "ignore": [],
   "ignoreDependencies": [
     "@jest/globals",
-    "@types/testing-library__jest-dom",
     "autoprefixer",
     "postcss",
     "tailwindcss"

@@ -11,8 +11,8 @@
 * `lib/` — stack and construct definitions.
 * `scripts/` — operational shell scripts (deploy, tunnels, db access). `lib.sh`
   holds shared helpers and is sourced, never run directly.
-* `tests/` — the quality gates (lint, copyright, security) and the cdk-nag
-  template.
+* `tests/` — the quality gates (lint, copyright, security, git guard) and the
+  cdk-nag template.
 * `cdk.json` — note `outputsFile: cdk_outputs.json`; scripts read deploy outputs
   from that file rather than calling the CloudFormation API.
 
@@ -62,6 +62,10 @@ removed). See `tests/cdk_nag_suppressions.test.ts.template` to activate this.
 Keep embedded inline scripting short; longer logic belongs in a discoverable
 `scripts/*.sh` file.
 
+Never copy a file to a fixed path in a remote host's `/tmp`. Another account
+could read it, or plant its own file there first for root to run. Copy into a
+private directory (mode 700) instead.
+
 ## License / copyright header gate
 
 `tests/copyright_checks.test.ts` enforces per-file licensing on `.ts` and
@@ -76,6 +80,22 @@ Keep embedded inline scripting short; longer logic belongs in a discoverable
 A fresh scaffold is green (everything shipped is SPDX-exempt); the gate starts
 enforcing once you add your own source without an SPDX tag or copyright header.
 Your ownership of the project as a whole lives once in `LICENSE`.
+
+## Tests run only read-only git
+
+Tests may run `ls-files`, `log` and `check-ignore`. No `init`, `add`, `commit`,
+`config`, `push` or `checkout`, not even in a temp dir. The pre-commit hook runs
+this suite, and git exports `GIT_DIR` and similar variables to hooks. A git write
+from a test then lands in the repo being committed. When a script under test runs
+git, stub `git` on `PATH` instead.
+
+* `tests/git_guard.test.ts` fails on any test file under `tests/` that runs a git
+  subcommand other than those three, or a `-c` option. It scans test files, not
+  the scripts they run.
+* `tests/helpers/gitGuard.ts` holds the scan and Jest's `globalSetup`. The setup
+  clears every `GIT_*` variable and sets `GIT_CEILING_DIRECTORIES` to the temp
+  directory. A git call in a temp dir then finds no repo above it.
+  In the starter kit, the file is a copy of `shared/tests/gitGuard.ts`.
 
 ## Environment notes
 

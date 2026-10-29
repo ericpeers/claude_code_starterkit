@@ -2,24 +2,10 @@
 
 package tests
 
-// API naming conventions enforced against the generated Swagger docs:
-//
-//   - URL path segments          -> kebab-case  (lowercase, hyphen-separated)
-//   - JSON payload fields         -> snake_case  (lowercase, underscore-separated)
-//   - Query / body / form params  -> snake_case
-//   - Path template params ({user_id}) -> snake_case (they bind to identifiers)
-//
-// Rationale: hyphens are the convention for URLs, which are case-insensitive,
-// hyphen-safe in DNS, and readable. Payload keys are reached as code
-// identifiers, where a hyphen is illegal. So they follow the snake_case used by
-// DB columns and Go json tags. A test holds the surface steady as new endpoints
-// land.
-//
-// File-based gate: skips gracefully when docs/swagger.json is absent, so a fresh
-// scaffold stays green until you generate Swagger docs (e.g. via `swag init`).
-//
-// Customize:
-//   - bodyWrappers : generic whole-struct body parameter names to exempt.
+// API naming gates over the generated docs/swagger.json. URL path segments are
+// kebab-case. JSON fields and query, body, form, and path params are snake_case.
+// The gates skip until `make docs` writes the file. bodyWrappers lists the whole-struct
+// body parameter names to exempt.
 
 import (
 	"encoding/json"

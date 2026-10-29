@@ -29,7 +29,7 @@ For each file in the diff, read the entire file's changes, then apply every rule
 
 1. Is the code concise?
 1. Does the code use descriptive variable names? Check if a variable is named to affect control flow but doesn't have the intended impact. In refactors or parallelization efforts, check if original variables need a substring added.
-1. Do functions have comments? For 50+ line functions, do they describe the "what" and the "why" of the function in no more than 3-4 lines?
+1. Do functions have comments? For 50+ line functions, do they describe the "what" and the "why" of the function in no more than 4 lines? For short functions, do they describe the what in 1-2 lines?
 1. Do major sections of code have comments? If the code is complicated, does it have 1-2 line comments every 10-20 lines, walking the reader through the flow?
 1. Are magic numbers that represent business rules or domain thresholds (regulatory limits, rate caps, timeouts, age/size boundaries) named as constants? Implementation-detail literals (byte offsets, fixed field widths, array indices) are acceptable with an inline comment instead.
 1. [cross-file] Does the code follow the same naming patterns used elsewhere? E.g. is it a "userId" and not an "id".
@@ -40,7 +40,7 @@ For each file in the diff, read the entire file's changes, then apply every rule
 
 ### General: Comments
 
-1. Is each comment proportional to the code it documents? Flag as too long: more than 2 comment lines on a single constant, variable, or struct field; more than 10 on a function or type; more than 20 at file or package level. Quote the count and the declaration, and say which sentences to cut.
+1. Is each comment proportional to the code it documents? Flag as too long: more than 2 comment lines on a single constant, variable, or struct field; more than 4 on a function; more than 10 on a type; more than 20 at file or package level. Quote the count and the declaration, and say which sentences to cut.
 1. Are there too many comments? Flag any reviewed source file where total comment lines exceed 75% of code lines. Quote the count and the declaration, and say which sentences to cut.
 1. If a single declaration needs a long explanation, that is a design smell rather than good documentation — the declaration is usually carrying too much. Flag it and recommend one of two fixes: simplify the design, or move the reasoning to a design doc and leave a one-line comment pointing at it.
 1. Does the comment state the decision instead of arguing for it? Flag persuasive or defensive prose: pre-empting objections nobody raised, rebutting absent alternatives, or restating a point for emphasis. One or two sentences of "why" is the budget.
@@ -52,7 +52,17 @@ For each file in the diff, read the entire file's changes, then apply every rule
 1. Does the surrounding code have comments? Flag a comment that is out of place amongst its peers.
 1. Does a comment justify keeping code that cannot be reached? Flag the code, not just the comment.
 1. Are comments free of these banned words and phrases, any capitalization or inflection? `by design`, `foot-gun`, `genuine`, `grounded`, `honest`, `load-bearing`, `meaningfully`, `oracle`, `pins`, `real`, `venue`, `win`. Exempt only when quoting a proper name the code doesn't control (`X-Real-IP`, the Oracle database).
-1. Are the sentences short enough to read? Target 10-15 words. Flag any sentence over 25 words. Flag any sentence with two or more em dashes or parentheticals. Flag any paragraph where commas outnumber periods. The fix is to break the clause chain into separate sentences. A parenthetical that carries content becomes its own sentence. Quote the offending sentence and give the split version. This rule covers markdown prose as much as code comments. Fenced code blocks and ASCII diagrams are exempt.
+1. Does the comment lead with the normal case, with its exception right after? Flag a third fact placed between a rule and its exception.
+1. Is the comment written for the reader of that surface? An API description (swagger, public docs) says what the caller sees and does. Flag server internals in it, such as check order, encryption, or audit logging.
+1. Is a conditional behavior stated with its condition? Flag a sentence that states a conditional effect as if it always happens.
+1. Are the words free of defensive qualifiers? Flag words that only rule out an unlikely reading ("own", "current", "calling").
+1. Does the comment use a relative clause where a single adjective would suffice? Flag a clause that a single word can replace ("a run that is not a dry run" → "a normal run").
+1. Does each sentence over 25 words have one actor? Flag a clause where a second noun acts ("the client that opts.Mode selects", "the rows Validate drops"). Quote the sentence and give a rewrite: "New builds a mailer based on cfg.Transport."
+1. In a sentence over 25 words, does each pronoun have one possible referent? Flag "it", "this" or "which" when two or more earlier nouns could fit.
+1. Does a test's doc lead with the behavior it protects? Flag a doc that describes the setup first and states the purpose later.
+1. Does the prose use the API's names? Flag a synonym for a field, route, or error code ("expired holds" for `holds_released`) and suggest using the API name instead.
+1. [cross-file] Is each caveat explained once? Flag the same edge case explained on several surfaces (swagger, function docs, design docs). Keep it where the code enforces it and point there, or drop it and rely on the test.
+1. Are the sentences short enough to read? Target 10-15 words. Flag any sentence over 25 words. A sentence of 25 words or fewer passes this rule, whatever its commas, em dashes, or parentheticals. The fix is to break the clause chain into separate sentences. A parenthetical that carries content becomes its own sentence. Quote the offending sentence and give the split version. This rule covers markdown prose as much as code comments. Fenced code blocks and ASCII diagrams are exempt.
 
 ### General: Correctness
 
@@ -91,6 +101,7 @@ Apply only when reviewing *.ts, *.tsx
 Apply only when reviewing *.go files
 
 1. Do new API endpoints include appropriate swagger documentation describing what the endpoint does?
+1. Is each swagger `@Description` 1–3 sentences? Flag field meanings that belong on the model fields, and error cases that belong on `@Failure` lines.
 
 ### Language: Scripting (Bash / Python)
 Apply only when reviewing *.sh, *.py, *.pl files

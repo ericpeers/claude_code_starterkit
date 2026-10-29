@@ -9,3 +9,7 @@ pytest-asyncio
 ruff
 vulture
 pyright
+
+# Dependency vulnerability gate (tests/test_vuln_audit.py, scripts/fix_vulns.py)
+pip-audit
+packaging

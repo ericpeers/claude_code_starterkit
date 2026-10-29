@@ -76,6 +76,7 @@ log "Wiring git hooks"
 if [ -d .git ]; then
   git config core.hooksPath .githooks
   [ -f .githooks/pre-commit ] && chmod +x .githooks/pre-commit
+  [ -f .githooks/commit-msg ] && chmod +x .githooks/commit-msg
   echo "  core.hooksPath -> .githooks"
 else
   warn "not a git repository; run 'git init' then re-run to wire hooks"
@@ -83,6 +84,7 @@ fi
 
 # --- Phase 7: tests -------------------------------------------------------
 log "Running tests"
+# tests/test_vuln_audit.py needs network access to PyPI.
 pytest -q
 
 cat <<'EOF'

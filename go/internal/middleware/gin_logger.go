@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-// Package middleware holds request-scoped Gin middleware. GinLogger is the kit's
-// unified-logging building block. It routes Gin's per-request log lines through
-// logrus, so startup, request, and application lines share one format, timestamp
-// layout, and level filter. Wire it in with
-// gin.New(), not gin.Default(), which installs Gin's own stdout logger:
+// Package middleware holds request-scoped Gin middleware. GinLogger routes Gin's
+// request lines through logrus, so every log line shares one format and level.
+// Build the router with gin.New(), since gin.Default() adds a second logger:
 //
-//	router := gin.New()
 //	router.Use(gin.Recovery(), middleware.GinLogger())
-//
-// and configure logrus once at startup (see CLAUDE.md "Logging" for the full
-// pattern). Generated docs and other internal/ middleware live alongside this.
 package middleware
 
 import (

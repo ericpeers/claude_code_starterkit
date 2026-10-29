@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Strips Co-Authored-By trailers. See CONVENTIONS.md, "Git: read-only for the
+# agent".
+set -euo pipefail
+
+sed -i '/^Co-[Aa]uthored-[Bb]y:/d' "$1"
+git stripspace -s <"$1" >"$1.stripped" && mv "$1.stripped" "$1"

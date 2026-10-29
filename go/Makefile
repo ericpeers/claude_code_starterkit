@@ -17,20 +17,18 @@ test:
 	go test ./tests/ -timeout 120s
 
 # Regenerate the Swagger/OpenAPI spec from handler annotations into ./docs.
-# Requires the swag CLI (setup_dev.sh installs it; or: go install
-# github.com/swaggo/swag/cmd/swag@latest). main.go must blank-import the
-# generated package (_ "<module>/docs") for the UI to serve the spec.
+# swag runs through `go tool`, at the version declared in go.mod. main.go must
+# blank-import the generated package (_ "<module>/docs") for the UI to serve it.
 docs:
-	swag init --parseDependency --parseInternal -o docs
+	go tool swag init --parseDependency --parseInternal -o docs
 
 run:
 	go run .
 
-# Update vulnerable dependencies flagged by govulncheck.
+# Upgrade flagged dependencies, then triage the rest into
+# tests/vuln_allowlist.json. Needs jq.
 fix_vulns:
-	govulncheck ./... || true
-	go get -u ./...
-	go mod tidy
+	bash scripts/fix_vulns.sh
 
 # Version string: YYYY.MM.DD.<commits-today>-<short-hash>
 DATE    := $(shell date +%Y.%m.%d)

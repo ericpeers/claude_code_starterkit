@@ -2,17 +2,8 @@
 
 package tests
 
-// License / copyright header gate for Go sources.
-//
-// Two kinds of files coexist in a project built from this kit:
-//   * Kit-supplied boilerplate — declares `SPDX-License-Identifier: MIT` and is
-//     exempt here. It carries no personal copyright holder.
-//   * Your own source — must carry a current-year copyright header naming the
-//     project's configured holder (see the .copyright-holder file, written by
-//     setup_dev.sh). This is how you enforce your ownership on the code you write.
-//
-// A fresh scaffold is green (everything shipped is SPDX-exempt). The gate starts
-// enforcing once you add your own .go files without an SPDX tag or copyright header.
+// License header gate for Go sources. Kit files carry an SPDX tag and are exempt.
+// Your own files carry a copyright header naming the holder in .copyright-holder.
 
 import (
 	"io/fs"

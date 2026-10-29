@@ -2,16 +2,9 @@
 
 package tests
 
-// Generic, file-based quality gates. These need no database and run as soon as
-// the project has an `internal/` tree and a SQL schema file. Each test skips
-// gracefully when its target paths don't exist yet, so a fresh scaffold stays
-// green until you add the code these guard.
-//
-// Customize:
-//   - schemaFile        : path (repo-relative) to your DDL file
-//   - repositoryDir     : path to the package whose table access you want fenced
-//   - tableOwnership    : map every table to the single file allowed to mutate it
-//   - allowedJoins      : read-only cross-file JOIN exceptions
+// File-based SQL quality gates. Each skips until its target paths exist.
+// Customize schemaFile (setup_test.go), repositoryDir, and the tableOwnership
+// and allowedJoins maps in TestRepositoryTableOwnership.
 
 import (
 	"os"
@@ -22,10 +15,8 @@ import (
 	"testing"
 )
 
-const (
-	schemaFile    = "create_tables.sql"
-	repositoryDir = "internal/repository"
-)
+// repositoryDir is the package whose table access the ownership gate fences.
+const repositoryDir = "internal/repository"
 
 // TestSQLFluffLint runs `sqlfluff lint` on the schema file. Skips if sqlfluff is
 // not installed or the schema file does not exist.
@@ -51,13 +42,9 @@ func TestSQLFluffLint(t *testing.T) {
 	}
 }
 
-// TestRepositoryTableOwnership enforces that each repository file only accesses
-// tables it owns. This makes module-boundary isolation a mechanical gate rather
-// than a code-review habit. Read-only cross-file JOINs are whitelisted in
-// allowedJoins. Skips if the repository directory does not exist yet.
-//
-// Fill in tableOwnership/allowedJoins for your schema. The entries below are an
-// illustrative example — replace them.
+// TestRepositoryTableOwnership checks that each repository file touches only the
+// tables it owns, apart from the read-only JOINs in allowedJoins. Replace the
+// example maps with your schema. It skips until the repository directory exists.
 func TestRepositoryTableOwnership(t *testing.T) {
 	t.Parallel()
 
@@ -156,39 +143,6 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
-}
-
-// getRepoRoot walks up from the working directory to the nearest .git or go.mod.
-func getRepoRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find repository root")
-		}
-		dir = parent
-	}
-}
-
-// optionalFilePath returns the absolute path for a repo-relative path, or ""
-// when it does not exist (so callers can t.Skip instead of failing).
-func optionalFilePath(t *testing.T, relativePath string) string {
-	t.Helper()
-	full := filepath.Join(getRepoRoot(t), relativePath)
-	if _, err := os.Stat(full); err != nil {
-		return ""
-	}
-	return full
 }
 
 // extractTablesFromQueries pulls table names out of backtick-delimited SQL
