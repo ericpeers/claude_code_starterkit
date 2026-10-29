@@ -55,6 +55,7 @@ Let **DEST** = the current directory (the new, ideally empty, repo).
    * `KIT/shared/claude/settings.json` → `DEST/.claude/settings.json`
    * `KIT/shared/claude/skills/review-code/` → `DEST/.claude/skills/review-code/`
    * `KIT/shared/claude/skills/design-doc/` → `DEST/.claude/skills/design-doc/`
+   * `KIT/shared/claude/skills/exec-brief/` → `DEST/.claude/skills/exec-brief/`
 5. **Git hooks** — copy the stack's pre-commit:
    * react: `KIT/react/githooks/pre-commit` → `DEST/.githooks/pre-commit`
    * go / python / infra: `KIT/shared/githooks/pre-commit` →

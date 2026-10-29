@@ -26,7 +26,7 @@ The agent reads [`SCAFFOLD.md`](SCAFFOLD.md) — the deterministic, per-stack re
 — and assembles the new project: `CLAUDE.md` (with the relevant conventions
 inlined), generic tests, `setup_dev.sh`, `.env_sample`, `.gitignore`, a
 `.githooks/pre-commit` test gate, and a `.claude/` directory containing
-`settings.json` and the `review-code` and `design-doc` skills.
+`settings.json` and the `review-code`, `design-doc`, and `exec-brief` skills.
 
 Then in the new repo:
 
